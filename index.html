@@ -195,21 +195,21 @@
             margin-top: 20px;
         }
 
-        #open-modal-list {
+        #open-modal-list-models, #open-modal-list-processes {
             list-style-type: none;
             padding: 0;
             max-height: 300px;
             overflow-y: auto;
             border: 1px solid var(--border-color);
         }
-        #open-modal-list li {
+        #open-modal-list-models li, #open-modal-list-processes li {
             padding: 10px;
             cursor: pointer;
         }
-        #open-modal-list li:hover {
+        #open-modal-list-models li:hover, #open-modal-list-processes li:hover {
             background-color: var(--primary-bg);
         }
-        #open-modal-list li.selected {
+        #open-modal-list-models li.selected, #open-modal-list-processes li.selected {
             background-color: var(--accent-color);
             color: white;
         }
@@ -243,7 +243,6 @@
                 <button id="open-btn">Open</button>
                 <button id="save-btn">Save</button>
                 <button id="delete-btn">Delete</button>
-                <button id="paste-btn">Paste</button>
                 <button id="export-btn">Export JSON-LD</button>
                 <label for="import-file-input" id="import-label">Import JSON-LD</label>
                 <input type="file" id="import-file-input" accept=".jsonld">
@@ -283,9 +282,11 @@
     <div class="modal-content">
         <h2>Open Diagram</h2>
         <h3>Models</h3>
-        <ul id="open-modal-list-models"></ul>
+        <select id="open-models-select">
+        </select>
         <h3>Processes</h3>
-        <ul id="open-modal-list-processes"></ul>
+        <select id="open-processes-select">
+        </select>
         <div class="modal-buttons">
             <button id="open-cancel-btn">Cancel</button>
             <button id="open-confirm-btn">Open</button>
@@ -434,22 +435,28 @@
     codeTab.addEventListener('click', () => switchTab('code'));
     diagramTab.addEventListener('click', () => switchTab('diagram'));
 
-    // --- Event Listeners for Toolbar ---
-    document.getElementById('save-btn').addEventListener('click', async () => {
+    // --- Save Logic ---
+    async function saveCurrentDiagram() {
         if (!currentDiagram.name || !currentDiagram.directory) {
-            alert('Cannot save. Please create a new file first or open an existing one.');
+            // If trying to save a new file, open the 'new' modal instead.
+            document.getElementById('new-btn').click();
             return;
         }
         try {
             const savedDiagram = await db.saveDiagram(currentDiagram.directory, currentDiagram.name, codeEditor.value);
             currentDiagram.content = savedDiagram.content;
-            currentDiagram.id = savedDiagram['@id'].replace('urn:uuid:', '');
+            // Extract UUID without the 'urn:uuid:' prefix
+            currentDiagram.id = savedDiagram['@id'].substring(9);
             alert(`Diagram "${currentDiagram.name}" saved successfully!`);
             updateUI();
         } catch (error) {
             alert(`Error saving diagram: ${error}`);
         }
-    });
+    }
+
+    // --- Event Listeners for Toolbar ---
+    document.getElementById('save-btn').addEventListener('click', saveCurrentDiagram);
+
 
     document.getElementById('delete-btn').addEventListener('click', async () => {
         if (!currentDiagram.name) {
@@ -467,16 +474,6 @@
         }
     });
 
-    document.getElementById('paste-btn').addEventListener('click', async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            codeEditor.value = text;
-            codeEditor.focus();
-        } catch (err) {
-            alert('Failed to read clipboard contents.');
-        }
-    });
-
     // --- Modal Logic ---
     const newModal = document.getElementById('new-modal');
     const openModal = document.getElementById('open-modal');
@@ -488,59 +485,82 @@
         document.getElementById('new-name').focus();
     });
     document.getElementById('new-cancel-btn').addEventListener('click', () => newModal.style.display = 'none');
-    document.getElementById('new-create-btn').addEventListener('click', () => {
+    document.getElementById('new-create-btn').addEventListener('click', async () => {
         const name = document.getElementById('new-name').value.trim();
         const directory = document.getElementById('new-directory').value;
         if (!name) {
             alert('Please enter a name for the diagram.');
             return;
         }
-        resetCurrentDiagram();
+        const isNewFile = !currentDiagram.name;
+        const contentToSave = isNewFile ? codeEditor.value : 'graph TD;\n  A-->B;';
+
         currentDiagram.name = name;
         currentDiagram.directory = directory;
-        updateUI();
+        currentDiagram.content = contentToSave;
+        currentDiagram.id = null; // Ensure it gets a new UUID on save
         newModal.style.display = 'none';
+        await saveCurrentDiagram(); // Auto-save the newly created file
     });
 
     // Open Modal
     document.getElementById('open-btn').addEventListener('click', async () => {
-        const lists = {
-            Models: document.getElementById('open-modal-list-models'),
-            Processes: document.getElementById('open-modal-list-processes')
-        };
-        for (const dir in lists) {
-            lists[dir].innerHTML = '';
-            const diagrams = await db.listDiagrams(dir);
+        const modelsSelect = document.getElementById('open-models-select');
+        const processesSelect = document.getElementById('open-processes-select');
+
+        // Helper to populate a select element
+        const populateSelect = async (selectEl, directory, placeholder) => {
+            selectEl.innerHTML = `<option value="">-- ${placeholder} --</option>`;
+            const diagrams = await db.listDiagrams(directory);
             diagrams.forEach(d => {
-                const li = document.createElement('li');
-                li.textContent = d.name;
-                li.dataset.name = d.name;
-                li.dataset.directory = d.directory;
-                lists[dir].appendChild(li);
+                const option = document.createElement('option');
+                option.textContent = d.name;
+                option.dataset.name = d.name;
+                option.dataset.directory = d.directory;
+                selectEl.appendChild(option);
             });
-        }
+        };
+
+        await populateSelect(modelsSelect, 'Models', 'Select a Model');
+        await populateSelect(processesSelect, 'Processes', 'Select a Process');
+
         openModal.style.display = 'flex';
     });
 
-    openModal.addEventListener('click', (e) => {
-        if (e.target.tagName === 'LI') {
-            openModal.querySelectorAll('li').forEach(li => li.classList.remove('selected'));
-            e.target.classList.add('selected');
+    // Ensure only one dropdown has a selection
+    document.getElementById('open-models-select').addEventListener('change', (e) => {
+        if (e.target.value) {
+            document.getElementById('open-processes-select').value = '';
+        }
+    });
+    document.getElementById('open-processes-select').addEventListener('change', (e) => {
+        if (e.target.value) {
+            document.getElementById('open-models-select').value = '';
         }
     });
 
     document.getElementById('open-cancel-btn').addEventListener('click', () => openModal.style.display = 'none');
     document.getElementById('open-confirm-btn').addEventListener('click', async () => {
-        const selectedLi = openModal.querySelector('li.selected');
-        if (!selectedLi) {
+        const modelsSelect = document.getElementById('open-models-select');
+        const processesSelect = document.getElementById('open-processes-select');
+
+        let selectedOption = null;
+        if (modelsSelect.value) {
+            selectedOption = modelsSelect.selectedOptions[0];
+        } else if (processesSelect.value) {
+            selectedOption = processesSelect.selectedOptions[0];
+        }
+
+        if (!selectedOption) {
             alert('Please select a diagram to open.');
             return;
         }
-        const { name, directory } = selectedLi.dataset;
+
+        const { name, directory } = selectedOption.dataset;
         try {
             const diagramData = await db.loadDiagram(directory, name);
             currentDiagram = {
-                id: diagramData['@id'].replace('urn:uuid:', ''),
+                id: diagramData['@id'].substring(9),
                 name: diagramData.name,
                 directory: diagramData.directory,
                 content: diagramData.content,
@@ -593,7 +613,7 @@
                 // Optionally, load the imported diagram
                 const diagramData = await db.loadDiagram(data.directory, data.name);
                 currentDiagram = {
-                    id: diagramData['@id'].replace('urn:uuid:', ''),
+                    id: diagramData['@id'].substring(9),
                     name: diagramData.name,
                     directory: diagramData.directory,
                     content: diagramData.content,
