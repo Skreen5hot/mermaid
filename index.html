@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Syntax Viewer & Editor</title>
+    <style>
+        :root {
+            --primary-bg: #f4f7f9;
+            --secondary-bg: #ffffff;
+            --header-bg: #2c3e50;
+            --header-text: #ecf0f1;
+            --text-color: #34495e;
+            --border-color: #dfe6e9;
+            --accent-color: #3498db;
+            --accent-hover: #2980b9;
+            --danger-color: #e74c3c;
+            --danger-hover: #c0392b;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+        }
+
+        header, footer {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            padding: 0.75rem 1rem;
+            text-align: center;
+        }
+
+        header {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        footer {
+            font-size: 0.8rem;
+        }
+
+        main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #tabs {
+            display: flex;
+            background-color: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #tabs button {
+            padding: 0.8rem 1.2rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 1rem;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s ease-in-out;
+        }
+
+        #tabs button.active {
+            border-bottom-color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        #content-area {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .content-view {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            overflow: auto;
+        }
+
+        .content-view.active {
+            display: flex;
+        }
+
+        /* Code View */
+        #code-view {
+            gap: 0.5rem;
+        }
+
+        #toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background-color: var(--secondary-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #toolbar button, #toolbar label {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--accent-color);
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+
+        #toolbar button:hover, #toolbar label:hover {
+            background-color: var(--accent-hover);
+        }
+
+        #toolbar #delete-btn {
+            background-color: var(--danger-color);
+        }
+        #toolbar #delete-btn:hover {
+            background-color: var(--danger-hover);
+        }
+
+        #code-editor {
+            flex-grow: 1;
+            border: none;
+            padding: 1rem;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 1rem;
+            resize: none;
+            outline: none;
+        }
+
+        /* Diagram View */
+        #diagram-container {
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--secondary-bg);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+        }
+
+        .modal-content input, .modal-content select {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            display: inline-block;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        #open-modal-list {
+            list-style-type: none;
+            padding: 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+        }
+        #open-modal-list li {
+            padding: 10px;
+            cursor: pointer;
+        }
+        #open-modal-list li:hover {
+            background-color: var(--primary-bg);
+        }
+        #open-modal-list li.selected {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        #file-info {
+            padding: 0.5rem;
+            background-color: #eaf2f8;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        #import-file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<header>Mermaid Syntax Viewer & Editor</header>
+
+<main>
+    <section id="tabs">
+        <button id="code-tab" class="active" role="tab" aria-selected="true">Code</button>
+        <button id="diagram-tab" role="tab" aria-selected="false">Diagram</button>
+    </section>
+
+    <section id="content-area">
+        <div id="code-view" class="content-view active">
+            <div id="toolbar">
+                <button id="new-btn">New</button>
+                <button id="open-btn">Open</button>
+                <button id="save-btn">Save</button>
+                <button id="delete-btn">Delete</button>
+                <button id="paste-btn">Paste</button>
+                <button id="export-btn">Export JSON-LD</button>
+                <label for="import-file-input" id="import-label">Import JSON-LD</label>
+                <input type="file" id="import-file-input" accept=".jsonld">
+            </div>
+            <div id="file-info">No file open.</div>
+            <textarea id="code-editor" placeholder="graph TD; A-->B;"></textarea>
+        </div>
+
+        <div id="diagram-view" class="content-view">
+            <div id="diagram-container"></div>
+        </div>
+    </section>
+</main>
+
+<footer>Version 1.0</footer>
+
+<!-- New Diagram Modal -->
+<div id="new-modal" class="modal">
+    <div class="modal-content">
+        <h2>New Diagram</h2>
+        <label for="new-name">Name:</label>
+        <input type="text" id="new-name" required>
+        <label for="new-directory">Directory:</label>
+        <select id="new-directory">
+            <option value="Models">Models</option>
+            <option value="Processes">Processes</option>
+        </select>
+        <div class="modal-buttons">
+            <button id="new-cancel-btn">Cancel</button>
+            <button id="new-create-btn">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Open Diagram Modal -->
+<div id="open-modal" class="modal">
+    <div class="modal-content">
+        <h2>Open Diagram</h2>
+        <h3>Models</h3>
+        <ul id="open-modal-list-models"></ul>
+        <h3>Processes</h3>
+        <ul id="open-modal-list-processes"></ul>
+        <div class="modal-buttons">
+            <button id="open-cancel-btn">Cancel</button>
+            <button id="open-confirm-btn">Open</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script type="module">
+    // --- State Management ---
+    let currentDiagram = {
+        id: null,
+        name: '',
+        directory: '',
+        content: 'graph TD;\n  A-->B;',
+    };
+
+    // --- DOM Elements ---
+    const codeTab = document.getElementById('code-tab');
+    const diagramTab = document.getElementById('diagram-tab');
+    const codeView = document.getElementById('code-view');
+    const diagramView = document.getElementById('diagram-view');
+    const codeEditor = document.getElementById('code-editor');
+    const diagramContainer = document.getElementById('diagram-container');
+    const fileInfo = document.getElementById('file-info');
+
+    // --- IndexedDB Module ---
+    const db = {
+        _db: null,
+        async open() {
+            if (this._db) return this._db;
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('mermaid_viewer_db', 1);
+                request.onerror = () => reject("Error opening DB");
+                request.onsuccess = (event) => {
+                    this._db = event.target.result;
+                    resolve(this._db);
+                };
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('Models')) {
+                        db.createObjectStore('Models', { keyPath: 'name' });
+                    }
+                    if (!db.objectStoreNames.contains('Processes')) {
+                        db.createObjectStore('Processes', { keyPath: 'name' });
+                    }
+                };
+            });
+        },
+        async saveDiagram(directory, name, content) {
+            const db = await this.open();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([directory], 'readwrite');
+                const store = transaction.objectStore(directory);
+                const diagram = {
+                    '@context': { '@vocab': 'https://schema.org/', 'MermaidModel': 'https://example.org/ontology/MermaidModel' },
+                    '@id': `urn:uuid:${currentDiagram.id || crypto.randomUUID()}`,
+                    '@type': 'MermaidModel',
+                    name: name,
+                    directory: directory,
+                    content: content,
+                    dateModified: new Date().toISOString(),
+                };
+                const request = store.put(diagram);
+                request.onsuccess = () => resolve(diagram);
+                request.onerror = () => reject('Failed to save diagram.');
+            });
+        },
+        async loadDiagram(directory, name) {
+            const db = await this.open();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([directory], 'readonly');
+                const store = transaction.objectStore(directory);
+                const request = store.get(name);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject('Failed to load diagram.');
+            });
+        },
+        async listDiagrams(directory) {
+            const db = await this.open();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([directory], 'readonly');
+                const store = transaction.objectStore(directory);
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject('Failed to list diagrams.');
+            });
+        },
+        async deleteDiagram(directory, name) {
+            const db = await this.open();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([directory], 'readwrite');
+                const store = transaction.objectStore(directory);
+                const request = store.delete(name);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject('Failed to delete diagram.');
+            });
+        }
+    };
+
+    // --- UI and App Logic ---
+    function updateUI() {
+        codeEditor.value = currentDiagram.content;
+        if (currentDiagram.name) {
+            fileInfo.textContent = `Editing: ${currentDiagram.directory} / ${currentDiagram.name}`;
+        } else {
+            fileInfo.textContent = 'New unsaved file.';
+        }
+    }
+
+    function resetCurrentDiagram() {
+        currentDiagram = { id: null, name: '', directory: '', content: 'graph TD;\n  A-->B;' };
+        updateUI();
+    }
+
+    async function renderMermaid() {
+        const code = codeEditor.value;
+        try {
+            const { svg } = await mermaid.render('mermaid-graph', code);
+            diagramContainer.innerHTML = svg;
+        } catch (error) {
+            diagramContainer.innerHTML = `<pre style="color: red;">${error.message}</pre>`;
+        }
+    }
+
+    // Tab Switching
+    function switchTab(targetTab) {
+        if (targetTab === 'diagram') {
+            codeTab.classList.remove('active');
+            codeView.classList.remove('active');
+            diagramTab.classList.add('active');
+            diagramView.classList.add('active');
+            codeTab.setAttribute('aria-selected', 'false');
+            diagramTab.setAttribute('aria-selected', 'true');
+            renderMermaid();
+        } else {
+            diagramTab.classList.remove('active');
+            diagramView.classList.remove('active');
+            codeTab.classList.add('active');
+            codeView.classList.add('active');
+            diagramTab.setAttribute('aria-selected', 'false');
+            codeTab.setAttribute('aria-selected', 'true');
+        }
+    }
+
+    codeTab.addEventListener('click', () => switchTab('code'));
+    diagramTab.addEventListener('click', () => switchTab('diagram'));
+
+    // --- Event Listeners for Toolbar ---
+    document.getElementById('save-btn').addEventListener('click', async () => {
+        if (!currentDiagram.name || !currentDiagram.directory) {
+            alert('Cannot save. Please create a new file first or open an existing one.');
+            return;
+        }
+        try {
+            const savedDiagram = await db.saveDiagram(currentDiagram.directory, currentDiagram.name, codeEditor.value);
+            currentDiagram.content = savedDiagram.content;
+            currentDiagram.id = savedDiagram['@id'].replace('urn:uuid:', '');
+            alert(`Diagram "${currentDiagram.name}" saved successfully!`);
+            updateUI();
+        } catch (error) {
+            alert(`Error saving diagram: ${error}`);
+        }
+    });
+
+    document.getElementById('delete-btn').addEventListener('click', async () => {
+        if (!currentDiagram.name) {
+            alert('No diagram is open to delete.');
+            return;
+        }
+        if (confirm(`Are you sure you want to delete "${currentDiagram.name}"?`)) {
+            try {
+                await db.deleteDiagram(currentDiagram.directory, currentDiagram.name);
+                alert(`Diagram "${currentDiagram.name}" deleted.`);
+                resetCurrentDiagram();
+            } catch (error) {
+                alert(`Error deleting diagram: ${error}`);
+            }
+        }
+    });
+
+    document.getElementById('paste-btn').addEventListener('click', async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            codeEditor.value = text;
+            codeEditor.focus();
+        } catch (err) {
+            alert('Failed to read clipboard contents.');
+        }
+    });
+
+    // --- Modal Logic ---
+    const newModal = document.getElementById('new-modal');
+    const openModal = document.getElementById('open-modal');
+
+    // New Modal
+    document.getElementById('new-btn').addEventListener('click', () => {
+        newModal.style.display = 'flex';
+        document.getElementById('new-name').value = '';
+        document.getElementById('new-name').focus();
+    });
+    document.getElementById('new-cancel-btn').addEventListener('click', () => newModal.style.display = 'none');
+    document.getElementById('new-create-btn').addEventListener('click', () => {
+        const name = document.getElementById('new-name').value.trim();
+        const directory = document.getElementById('new-directory').value;
+        if (!name) {
+            alert('Please enter a name for the diagram.');
+            return;
+        }
+        resetCurrentDiagram();
+        currentDiagram.name = name;
+        currentDiagram.directory = directory;
+        updateUI();
+        newModal.style.display = 'none';
+    });
+
+    // Open Modal
+    document.getElementById('open-btn').addEventListener('click', async () => {
+        const lists = {
+            Models: document.getElementById('open-modal-list-models'),
+            Processes: document.getElementById('open-modal-list-processes')
+        };
+        for (const dir in lists) {
+            lists[dir].innerHTML = '';
+            const diagrams = await db.listDiagrams(dir);
+            diagrams.forEach(d => {
+                const li = document.createElement('li');
+                li.textContent = d.name;
+                li.dataset.name = d.name;
+                li.dataset.directory = d.directory;
+                lists[dir].appendChild(li);
+            });
+        }
+        openModal.style.display = 'flex';
+    });
+
+    openModal.addEventListener('click', (e) => {
+        if (e.target.tagName === 'LI') {
+            openModal.querySelectorAll('li').forEach(li => li.classList.remove('selected'));
+            e.target.classList.add('selected');
+        }
+    });
+
+    document.getElementById('open-cancel-btn').addEventListener('click', () => openModal.style.display = 'none');
+    document.getElementById('open-confirm-btn').addEventListener('click', async () => {
+        const selectedLi = openModal.querySelector('li.selected');
+        if (!selectedLi) {
+            alert('Please select a diagram to open.');
+            return;
+        }
+        const { name, directory } = selectedLi.dataset;
+        try {
+            const diagramData = await db.loadDiagram(directory, name);
+            currentDiagram = {
+                id: diagramData['@id'].replace('urn:uuid:', ''),
+                name: diagramData.name,
+                directory: diagramData.directory,
+                content: diagramData.content,
+            };
+            updateUI();
+            openModal.style.display = 'none';
+        } catch (error) {
+            alert(`Error opening diagram: ${error}`);
+        }
+    });
+
+    // --- Import/Export Logic ---
+    document.getElementById('export-btn').addEventListener('click', () => {
+        if (!currentDiagram.name) {
+            alert('Please save the diagram before exporting.');
+            return;
+        }
+        const diagramData = {
+            '@context': { '@vocab': 'https://schema.org/', 'MermaidModel': 'https://example.org/ontology/MermaidModel' },
+            '@id': `urn:uuid:${currentDiagram.id || 'new'}`,
+            '@type': 'MermaidModel',
+            name: currentDiagram.name,
+            directory: currentDiagram.directory,
+            content: codeEditor.value,
+            dateModified: new Date().toISOString(),
+        };
+        const blob = new Blob([JSON.stringify(diagramData, null, 2)], { type: 'application/ld+json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentDiagram.name}.jsonld`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('import-file-input').addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                // Basic validation
+                if (data['@type'] !== 'MermaidModel' || !data.name || !data.directory || !data.content) {
+                    throw new Error('Invalid JSON-LD file format for a MermaidModel.');
+                }
+                await db.saveDiagram(data.directory, data.name, data.content);
+                alert(`Successfully imported and saved "${data.name}".`);
+                // Optionally, load the imported diagram
+                const diagramData = await db.loadDiagram(data.directory, data.name);
+                currentDiagram = {
+                    id: diagramData['@id'].replace('urn:uuid:', ''),
+                    name: diagramData.name,
+                    directory: diagramData.directory,
+                    content: diagramData.content,
+                };
+                updateUI();
+            } catch (error) {
+                alert(`Import failed: ${error.message}`);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = ''; // Reset input
+    });
+
+    // --- Initialization ---
+    mermaid.initialize({ startOnLoad: false });
+    db.open().then(() => {
+        console.log('Database connection established.');
+        updateUI();
+    }).catch(err => console.error(err));
+
+</script>
+
+</body>
+</html>
