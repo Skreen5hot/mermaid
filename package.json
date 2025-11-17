@@ -1,9 +1,17 @@
 {
-  "name": "mermaid-ide",
+  "name": "pwa-task-manager",
   "version": "1.0.0",
-  "description": "A project-based Mermaid IDE",
-  "type": "module",
+  "description": "PWA Task Manager application",
+  "main": "index.js",
   "scripts": {
-    "test": "node scripts/run-all-tests.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "security-check": "npm audit --audit-level=high",
+    "prepare": "husky install"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "husky": "^8.0.3"
   }
 }
