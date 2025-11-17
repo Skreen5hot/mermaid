@@ -195,6 +195,34 @@ uiConcept.subscribe((event, payload) => {
             alert("Current project is empty or not selected.");
         }
     }
+    if (event === 'ui:uploadMmdClicked') {
+        console.log('Synchronization layer received ui:uploadMmdClicked event.');
+        const { files } = payload;
+        const { currentProjectId } = projectConcept.getState();
+
+        if (!currentProjectId) {
+            console.warn('Upload cancelled: No project selected.');
+            alert("Please select a project before uploading diagrams.");
+            return;
+        }
+
+        if (!files || files.length === 0) {
+            console.log('No files were selected in the file dialog.');
+            return;
+        }
+
+        console.log(`Processing ${files.length} uploaded file(s).`);
+        for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                const name = file.name.endsWith('.mmd') ? file.name.slice(0, -4) : file.name;
+                console.log(`Creating diagram "${name}" in project ID ${currentProjectId}.`);
+                diagramConcept.listen('createDiagram', { name, content, projectId: currentProjectId });
+            };
+            reader.readAsText(file);
+        }
+    }
 });
 
 /**

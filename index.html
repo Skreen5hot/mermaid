@@ -96,6 +96,19 @@
     import { initializeApp } from './src/synchronizations.js';
     initializeApp();
 </script>
+<script type="module">
+    // This script connects DOM events to the application's event system.
+    import { uiConcept } from './src/concepts/uiConcept.js';
+
+    const uploadInput = document.getElementById('upload-diagrams-input');
+    if (uploadInput) {
+        uploadInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            // Publish an event to the UI concept, which will be handled in synchronizations.js
+            uiConcept.notify('ui:uploadMmdClicked', { files });
+        });
+    }
+</script>
 
 </body>
 </html>

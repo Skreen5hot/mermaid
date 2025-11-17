@@ -93,6 +93,7 @@ This final phase tests the "wiring" between concepts as defined in `synchronizat
     -   `[ ]` **UI -> Project/Diagram**:
         -   When `uiConcept` notifies `ui:projectSelected`, verify `projectConcept.listen('setCurrentProject', ...)` is called.
         -   When `uiConcept` notifies `ui:newProjectClicked`, verify `projectConcept.listen('createProject', ...)` is called.
+        -   `[x]` When `uiConcept` notifies `ui:uploadMmdClicked`, verify `diagramConcept.listen('createDiagram', ...)` is called for each file.
     -   `[ ]` **Full End-to-End Flow**:
         -   Test a complete user story, e.g., "Creating a new project".
         -   Simulate `uiConcept.notify('ui:newProjectClicked', { name: 'Test Project' })`.
