@@ -40,6 +40,8 @@
         </div>
     </aside>
 
+    <div class="resizer" id="sidebar-resizer"></div>
+
     <div id="main-content">
         <button id="sidebar-toggle-btn" title="Toggle Sidebar">‹</button>
         <section id="tabs">
@@ -60,6 +62,8 @@
                 <div id="file-info">No file open.</div>
                 <textarea id="code-editor" placeholder="Create a 'NEW' graph or open an existing one."></textarea>
             </div>
+
+            <div class="resizer" id="split-view-resizer"></div>
 
             <div id="diagram-view" class="content-view">
                 <div id="diagram-toolbar">
@@ -91,7 +95,9 @@
 <!-- <script src="app.js" type="module" defer></script> -->
 <script type="module">
     import { initializeApp } from './src/synchronizations.js';
-    initializeApp();
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeApp();
+    });
 </script>
 <script type="module">
     // This script connects DOM events to the application's event system.

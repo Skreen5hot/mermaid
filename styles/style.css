@@ -135,6 +135,27 @@ main {
   border-right: 1px solid var(--border-color);
 }
 
+/* --- Resizer Styles --- */
+.resizer {
+  background-color: var(--border-color);
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.resizer:hover {
+  background-color: var(--accent-color);
+}
+
+#sidebar-resizer {
+  width: 5px;
+}
+
+#split-view-resizer {
+  width: 5px;
+  display: none; /* Hidden by default, shown in split view */
+}
+
 /* Code View */
 #code-view {
   gap: 0.5rem;
@@ -263,11 +284,11 @@ main.split-view-active #diagram-toolbar {
 
 #sidebar-toggle-btn {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 5px;
+  left: 5px;
   z-index: 10;
-  background-color: var(--primary-bg);
-  border: 1px solid var(--border-color);
+  background-color: transparent;
+  border: none;
   border-top: none;
   border-left: none;
   border-radius: 0 0 4px 0;

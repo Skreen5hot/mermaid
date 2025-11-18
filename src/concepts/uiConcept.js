@@ -21,7 +21,8 @@ function _cacheElements() {
         'sidebar-toggle-btn', 'project-selector', 'diagram-list', 'theme-toggle',
         'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
         'delete-btn', 'rename-btn', 'new-modal', 'new-name', 'new-cancel-btn',
-        'new-create-btn', 'upload-diagrams-input', 'download-project-btn',
+        'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
+        'split-view-resizer',
         'export-mmd-btn', 'render-btn'
     ];
     ids.forEach(id => elements[id] = document.getElementById(id));
@@ -30,7 +31,49 @@ function _cacheElements() {
 function _initialize() {
     _cacheElements();
     _attachEventListeners();
-    // Other initialization logic...
+    _initResizers();
+}
+
+function _initResizers() {
+    const sidebarResizer = elements['sidebar-resizer'];
+    const splitViewResizer = elements['split-view-resizer'];
+    const sidebar = elements['project-sidebar'];
+    const codeView = elements['code-view'];
+    const diagramView = elements['diagram-view'];
+
+    const createResizer = (resizer, leftPane, rightPane) => {
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            const onMouseMove = (moveEvent) => {
+                if (!isResizing) return;
+                const totalWidth = leftPane.offsetWidth + rightPane.offsetWidth;
+                const newLeftWidth = moveEvent.clientX - leftPane.getBoundingClientRect().left;
+                const newRightWidth = totalWidth - newLeftWidth;
+
+                leftPane.style.width = `${newLeftWidth}px`;
+                rightPane.style.width = `${newRightWidth}px`;
+            };
+
+            const onMouseUp = () => {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    };
+
+    createResizer(sidebarResizer, sidebar, document.getElementById('main-content'));
+    createResizer(splitViewResizer, codeView, diagramView);
 }
 
 async function _renderMermaidDiagram({ content }) {
@@ -245,13 +288,18 @@ function _toggleSplitView() {
         state.activeView = 'split';
         // Add a class to the parent container to enable flexbox layout
         document.getElementById('content-area').classList.add('split-view-active');
+        elements['split-view-resizer'].style.display = 'block';
         elements['code-view'].classList.add('active', 'split-view');
         elements['diagram-view'].classList.add('active', 'split-view');
         elements['split-view-btn'].classList.add('active');
+        // Reset widths to allow resizing
+        elements['code-view'].style.width = '50%';
+        elements['diagram-view'].style.width = '50%';
         bus.notify('ui:renderDiagramRequested');
     } else {
         state.activeView = state.activeTab;
         // Remove the class from the parent container
+        elements['split-view-resizer'].style.display = 'none';
         document.getElementById('content-area').classList.remove('split-view-active');
         elements['code-view'].classList.remove('split-view');
         elements['diagram-view'].classList.remove('split-view');

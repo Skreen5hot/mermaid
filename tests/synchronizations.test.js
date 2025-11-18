@@ -144,7 +144,8 @@ function setupMockEnvironment() {
             'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
             'delete-btn', 'rename-btn', 'new-modal', 'new-name', 'new-cancel-btn',
             'new-create-btn', 'upload-diagrams-input', 'download-project-btn',
-            'export-mmd-btn', 'export-btn', 'import-file-input', 'import-label'
+            'export-mmd-btn', 'render-btn', 'sidebar-resizer', 'split-view-resizer',
+            'main-content', 'content-area'
         ];
         ids.forEach(id => mockElements[id] = createMockElement(id));
 
