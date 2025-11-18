@@ -183,9 +183,11 @@ function _attachEventListeners() {
     elements['delete-project-btn']?.addEventListener('click', () => bus.notify('ui:deleteProjectClicked'));
 
     elements['diagram-list']?.addEventListener('click', (e) => {
-        if (e.target.tagName === 'LI') {
+        const listItem = e.target.closest('li[data-diagram-id]');
+        if (listItem) {
             tracer.startTrace('Select Diagram');
-            bus.notify('ui:diagramSelected', { diagramId: parseInt(e.target.dataset.diagramId, 10) });
+            const diagramId = parseInt(listItem.dataset.diagramId, 10);
+            bus.notify('ui:diagramSelected', { diagramId });
         }
     });
 

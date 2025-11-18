@@ -137,10 +137,14 @@ function _updateCurrentDiagramContent({ content }) {
     bus.notify('diagramContentChanged', { content });
 }
 
+// Debounce the reload function to prevent it from firing on every single diagram save during a batch upload.
+// We will wait 100ms after the LAST save event before reloading the list once.
+const _debouncedLoadDiagrams = debounce((projectId) => {
+    _loadDiagrams({ projectId });
+}, 100);
+
 function _handleDiagramSaved(savedDiagram) {
-    // After saving, the most reliable way to update the UI is to reload everything for the current project.
-    // This avoids complex state management, especially when batch-importing, and ensures consistency.
-    _loadDiagrams({ projectId: savedDiagram.projectId });
+    _debouncedLoadDiagrams(savedDiagram.projectId);
 }
 
 function _handleDiagramDeleted({ diagramId }) {

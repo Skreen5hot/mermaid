@@ -2,13 +2,17 @@ import { createEventBus } from '../utils/eventBus.js';
 
 const bus = createEventBus();
 let _db = null;
+let _dbConnectionPromise = null;
 
 async function _open() {
     if (_db) {
         bus.notify('databaseOpened');
         return;
     }
-    return new Promise((resolve, reject) => {
+    if (_dbConnectionPromise) {
+        return _dbConnectionPromise;
+    }
+    _dbConnectionPromise = new Promise((resolve, reject) => {
         const request = indexedDB.open('mermaid_viewer_db', 2);
         request.onerror = () => {
             bus.notify('error', "Error opening DB");
@@ -17,6 +21,7 @@ async function _open() {
         request.onsuccess = (event) => {
             _db = event.target.result;
             bus.notify('databaseOpened');
+            _dbConnectionPromise = null; // Reset for future connections if needed
             resolve();
         };
         request.onupgradeneeded = (event) => {
@@ -30,6 +35,7 @@ async function _open() {
             }
         };
     });
+    return _dbConnectionPromise;
 }
 
 function _createProject({ name }) {
