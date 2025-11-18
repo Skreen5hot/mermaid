@@ -22,6 +22,7 @@ function spyOn(obj, methodName) {
     const spy = {
         callCount: 0,
         lastArgs: null,
+        allArgs: [],
         restore: () => {
             obj[methodName] = originalMethod;
         }
@@ -30,6 +31,7 @@ function spyOn(obj, methodName) {
     obj[methodName] = function(...args) {
         spy.callCount++;
         spy.lastArgs = args;
+        spy.allArgs.push(args);
         return originalMethod.apply(this, args);
     };
 
@@ -71,6 +73,7 @@ class MockIndexedDB {
             transaction: () => ({
                 objectStore: () => ({
                     add: () => ({}),
+                    put: () => ({}),
                     get: () => ({}),
                     getAll: () => ({ onsuccess: (e) => e.target.result = [] }),
                     index: () => ({ getAll: () => ({}) })
@@ -252,5 +255,30 @@ describe('synchronizations.js (Integration Tests)', () => {
         // The spy will capture this call.
         assert.ok(projectListenSpy.callCount > 0, 'projectConcept.listen should have been called');
         assert.strictEqual(projectListenSpy.lastArgs[0], 'loadProjects', 'projectConcept should be told to load projects');
+    });
+
+    it('Startup Flow: Creates default project and diagram if none exist', () => {
+        const projectNotifySpy = spyOn(projectConcept, 'notify');
+        spies.push(projectNotifySpy);
+
+        const diagramListenSpy = spyOn(diagramConcept, 'listen');
+        spies.push(diagramListenSpy);
+
+        // 1. Simulate the `projectsListed` event with an empty array, which happens on first load.
+        storageConcept.notify('projectsListed', []);
+
+        // 2. Verify that receiving an empty project list triggers the `do:createProject` event.
+        const createProjectCall = projectNotifySpy.allArgs.find(args => args[0] === 'do:createProject');
+        assert.ok(createProjectCall, 'The "do:createProject" event should have been notified');
+        assert.strictEqual(createProjectCall[1].name, 'Default Project', 'The project name should be "Default Project"');
+
+        // 3. Simulate the `projectCreated` event for the default project.
+        const newProjectPayload = { id: 1, name: 'Default Project', isDefault: true };
+        storageConcept.notify('projectCreated', newProjectPayload);
+
+        // 4. Verify that this triggered the creation of the "generic" diagram.
+        const createDiagramCall = diagramListenSpy.allArgs.find(args => args[0] === 'createDiagram');
+        assert.ok(createDiagramCall, 'diagramConcept.listen should be called to create a diagram');
+        assert.strictEqual(createDiagramCall[1].name, 'generic', 'The diagram name should be "generic"');
     });
 });

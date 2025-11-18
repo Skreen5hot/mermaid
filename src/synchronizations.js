@@ -10,6 +10,16 @@ storageConcept.subscribe((event, payload) => {
     if (event === 'projectsListed') {
         projectConcept.listen('setProjects', payload);
     }
+    if (event === 'projectCreated' && payload.isDefault) {
+        // This is the new synchronization for the default project.
+        const defaultDiagramContent = `graph TD
+    A[Start] --> B{Is it?};
+    B -- Yes --> C[OK];
+    C --> D[End];
+    B -- No --> E[Find out];
+    E --> B;`;
+        diagramConcept.listen('createDiagram', { name: 'generic', projectId: payload.id, content: defaultDiagramContent });
+    }
     if (event === 'projectCreated') {
         projectConcept.listen('handleProjectCreated', payload);
     }
@@ -22,7 +32,10 @@ storageConcept.subscribe((event, payload) => {
     }
     // --- Storage -> Diagram ---
     if (event === 'diagramsListed') {
-        diagramConcept.listen('setDiagrams', payload);
+        // Get the project from the projectConcept state to provide context.
+        const projectState = projectConcept.getState();
+        const project = projectState.projects.find(p => p.id === payload.projectId);
+        diagramConcept.listen('setDiagrams', { diagrams: payload.diagrams, project });
     }
     if (event === 'diagramLoaded') {
         diagramConcept.listen('handleDiagramLoaded', payload);
@@ -59,7 +72,10 @@ projectConcept.subscribe((event, payload) => {
 
 // When the diagram concept wants to do something with storage, tell storage.
 diagramConcept.subscribe((event, payload) => {
-    if (event.startsWith('do:')) {
+    if (event === 'do:downloadFile') {
+        // This is a UI action, not a storage action.
+        uiConcept.listen('downloadFile', payload);
+    } else if (event.startsWith('do:')) {
         storageConcept.listen(event, payload);
     }
     // --- Diagram -> UI ---

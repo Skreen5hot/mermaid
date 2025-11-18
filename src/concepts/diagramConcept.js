@@ -23,14 +23,25 @@ function _loadDiagrams({ projectId }) {
         bus.notify('do:listDiagrams', { projectId });
     } else {
         // No project selected, clear the list and notify that no diagram is loaded.
-        _setDiagrams([]);
+        _setDiagrams({ diagrams: [], project: null });
         state.currentDiagram = null;
         bus.notify('diagramContentLoaded', { diagram: null });
     }
 }
 
-function _setDiagrams(diagrams) {
+function _setDiagrams({ diagrams, project }) {
     state.diagrams = diagrams;
+
+    // If we've loaded an empty list of diagrams for the default project, create the default diagram.
+    // This ensures the default diagram is present even on subsequent loads, not just the very first one.
+    if (diagrams.length === 0 && state.currentDiagram === null) {
+        if (project?.name === 'Default Project') {
+            const defaultContent = `graph TD\n    A[Start] --> B{Is it?};\n    B -- Yes --> C[OK];\n    C --> D[End];\n    B -- No --> E[Find out];\n    E --> B;`;
+            _createDiagram({ name: 'generic', projectId: project.id, content: defaultContent });
+            return; // The save/reload process will handle the rest.
+        }
+    }
+
     bus.notify('diagramsUpdated', { diagrams: state.diagrams, currentDiagramId: state.currentDiagram?.id });
 
     // If the list of diagrams for the current project is empty,
@@ -61,11 +72,11 @@ function _handleDiagramLoaded(diagram) {
     bus.notify('diagramsUpdated', { diagrams: state.diagrams, currentDiagramId: state.currentDiagram?.id });
 }
 
-function _createDiagram({ name, projectId }) {
+function _createDiagram({ name, projectId, content }) {
     const newDiagramData = {
         name,
         projectId,
-        content: 'graph TD;\n  A-->B;', // New diagrams start with some default content.
+        content: content || 'graph TD;\n  A-->B;', // Use provided content or a default.
     };
     bus.notify('do:saveDiagram', { diagramData: newDiagramData });
 }
@@ -184,6 +195,7 @@ export const diagramConcept = {
     reset: _reset, // Add a direct reset method for convenience in tests
     listen(event, payload) {
         if (actions[event]) {
+            console.log(`[DiagramConcept] Action received: ${event}`, payload);
             actions[event](payload);
         } else {
             bus.notify(event, payload);

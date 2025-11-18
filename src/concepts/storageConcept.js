@@ -95,7 +95,10 @@ function _listDiagrams({ projectId }) {
     const store = transaction.objectStore('diagrams');
     const index = store.index('projectId');
     const request = index.getAll(projectId);
-    request.onsuccess = () => bus.notify('diagramsListed', request.result);
+    request.onsuccess = (e) => {
+        const diagrams = e.target.result;
+        bus.notify('diagramsListed', { diagrams, projectId });
+    };
     request.onerror = () => bus.notify('error', 'Failed to list diagrams.');
 }
 

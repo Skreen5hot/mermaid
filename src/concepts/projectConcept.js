@@ -10,44 +10,44 @@ const initialState = {
 let state = { ...initialState };
 
 function _loadProjects() {
-    bus.notify('do:listProjects');
+    projectConcept.notify('do:listProjects');
 }
 
-function _setProjects(projects) {
+function _setProjects(projects = []) {
     state.projects = projects;
     const previousProjectId = state.currentProjectId;
 
-    // If no project is selected, or the selected one is gone, default to the first one.
-    if (projects.length > 0 && !state.projects.find(p => p.id === state.currentProjectId)) {
-        state.currentProjectId = projects[0].id;
-    } else if (projects.length === 0) {
+    if (projects.length === 0) {
+        projectConcept.notify('do:createProject', { name: 'Default Project', isDefault: true });
         state.currentProjectId = null;
+    } else if (!state.projects.find(p => p.id === state.currentProjectId)) {
+        state.currentProjectId = projects.length > 0 ? projects[0].id : null;
     }
     // If the project ID changed (e.g., on initial load), fire the 'projectChanged' event.
-    if (state.currentProjectId !== previousProjectId) {
-        bus.notify('projectChanged', { projectId: state.currentProjectId });
+    if (state.currentProjectId !== previousProjectId && state.currentProjectId !== null) {
+        projectConcept.notify('projectChanged', { projectId: state.currentProjectId });
     }
-    bus.notify('projectsUpdated', { projects: state.projects, currentProjectId: state.currentProjectId });
+    projectConcept.notify('projectsUpdated', { projects: state.projects, currentProjectId: state.currentProjectId });
 }
 
 function _createProject({ name }) {
-    bus.notify('do:createProject', { name });
+    projectConcept.notify('do:createProject', { name });
 }
 
 function _renameProject({ projectId, newName }) {
     // The storage concept doesn't have a rename, so we'll just save it with the same ID.
-    bus.notify('do:saveProject', { projectData: { id: projectId, name: newName } });
+    projectConcept.notify('do:saveProject', { projectData: { id: projectId, name: newName } });
 }
 
 function _deleteProject({ projectId }) {
-    bus.notify('do:deleteProject', { projectId });
+    projectConcept.notify('do:deleteProject', { projectId });
 }
 
 function _setCurrentProject({ projectId }) {
     const newProjectId = parseInt(projectId, 10);
     if (state.currentProjectId !== newProjectId) {
         state.currentProjectId = newProjectId;
-        bus.notify('projectChanged', { projectId: newProjectId });
+        projectConcept.notify('projectChanged', { projectId: newProjectId });
     }
 }
 
@@ -80,6 +80,7 @@ export const projectConcept = {
     reset: _reset,
     listen(event, payload) {
         if (actions[event]) {
+            console.log(`[ProjectConcept] Action received: ${event}`, payload);
             actions[event](payload);
         } else {
             // Allow direct notification for external events to trigger internal actions
