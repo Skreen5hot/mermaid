@@ -220,6 +220,24 @@ function _hideNewDiagramModal() {
     newModal.style.display = 'none';
 }
 
+function _updateButtonStates({ currentDiagram }) {
+    // A diagram is considered "active" for saving/deleting/renaming only if it has an ID.
+    // This keeps the buttons disabled for the initial "unsaved" diagram state.
+    console.log('[UI] Updating button states based on diagram:', currentDiagram);
+
+    const isDiagramActive = !!currentDiagram?.id;
+    console.log(`[UI] Diagram has an ID? ${isDiagramActive}. Setting disabled to: ${!isDiagramActive}`);
+
+    if (saveDiagramBtn) {
+        saveDiagramBtn.disabled = !isDiagramActive;
+        deleteDiagramBtn.disabled = !isDiagramActive;
+        renameDiagramBtn.disabled = !isDiagramActive;
+    } else {
+        // This log helps catch initialization errors.
+        console.error('[UI] Could not find toolbar buttons to update their state.');
+    }
+}
+
 function _attachEventListeners() {
     projectSelector.addEventListener('change', (event) => {
         bus.notify('ui:projectSelected', { projectId: event.target.value });
@@ -313,8 +331,19 @@ const actions = {
     'switchTab': _switchTab,
     'downloadFile': _downloadFile,
     'showNewDiagramModal': _showNewDiagramModal,
+    'updateButtonStates': _updateButtonStates,
     'hideNewDiagramModal': _hideNewDiagramModal,
     'initialize': () => {
+        // Test-only helpers
+        if (typeof window === 'undefined') { // Running in Node.js for tests
+            actions.setTestElements = (elements) => {
+                saveDiagramBtn = elements.saveDiagramBtn;
+                deleteDiagramBtn = elements.deleteDiagramBtn;
+                renameDiagramBtn = elements.renameDiagramBtn;
+            };
+            actions.getTestElements = () => ({ saveDiagramBtn, deleteDiagramBtn, renameDiagramBtn });
+        }
+
         // Prevent multiple initializations
         if (isInitialized || typeof document === 'undefined') return;
 

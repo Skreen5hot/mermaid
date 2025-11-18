@@ -183,6 +183,13 @@ main.split-view-active #diagram-view {
   background-color: var(--danger-hover);
 }
 
+#toolbar button:disabled,
+#toolbar button:disabled:hover {
+  background-color: #bdc3c7; /* A neutral gray color */
+  cursor: not-allowed;
+  color: #ecf0f1;
+}
+
 #code-editor {
   flex-grow: 1;
   border: none;
@@ -293,6 +300,8 @@ main.split-view-active #diagram-toolbar {
   padding: 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
+    margin: 8px 0;
+
 }
 
 #new-project-btn {
@@ -306,6 +315,7 @@ main.split-view-active #diagram-toolbar {
   cursor: pointer;
   padding: 0;
   line-height: 0;
+  margin: 8px 0;
 }
 
 #delete-project-btn {
@@ -319,6 +329,7 @@ main.split-view-active #diagram-toolbar {
   cursor: pointer;
   padding: 0;
   line-height: 0;
+  margin: 8px 0;
 }
 
 #diagram-list {

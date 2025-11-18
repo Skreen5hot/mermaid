@@ -15,11 +15,17 @@ function _loadProjects() {
 
 function _setProjects(projects) {
     state.projects = projects;
+    const previousProjectId = state.currentProjectId;
+
     // If no project is selected, or the selected one is gone, default to the first one.
     if (projects.length > 0 && !state.projects.find(p => p.id === state.currentProjectId)) {
         state.currentProjectId = projects[0].id;
     } else if (projects.length === 0) {
         state.currentProjectId = null;
+    }
+    // If the project ID changed (e.g., on initial load), fire the 'projectChanged' event.
+    if (state.currentProjectId !== previousProjectId) {
+        bus.notify('projectChanged', { projectId: state.currentProjectId });
     }
     bus.notify('projectsUpdated', { projects: state.projects, currentProjectId: state.currentProjectId });
 }

@@ -50,6 +50,10 @@ projectConcept.subscribe((event, payload) => {
     // --- Project -> UI ---
     if (event === 'projectsUpdated') {
         uiConcept.listen('renderProjectSelector', payload);
+        // This is the fix: When projects are updated (e.g., on initial load),
+        // immediately trigger the diagram loading for the current project.
+        // This is now handled by the 'projectChanged' event, which is more robust.
+        // No action needed here anymore.
     }
 });
 
@@ -61,6 +65,9 @@ diagramConcept.subscribe((event, payload) => {
     // --- Diagram -> UI ---
     if (event === 'diagramsUpdated') {
         uiConcept.listen('renderDiagramList', payload);
+    }
+    if (event === 'do:showNewDiagramModal') {
+        uiConcept.listen('showNewDiagramModal');
     }
     if (event === 'diagramContentChanged') {
         // This is for split-view auto-render.
@@ -79,7 +86,12 @@ diagramConcept.subscribe((event, payload) => {
             projectName: currentProject?.name,
             diagramName: payload.diagram?.name || '',
         });
-        uiConcept.listen('renderMermaidDiagram', { content: payload.diagram?.content || '' });
+        // When content is loaded, update button states. A diagram being loaded means they should be enabled.
+        // If payload.diagram is null, it means no diagram is active, so they should be disabled.
+        uiConcept.listen('updateButtonStates', { currentDiagram: payload.diagram });
+        const initialContent = payload.diagram?.content || 'graph TD;\n  A-->B;';
+        uiConcept.listen('renderMermaidDiagram', { content: initialContent });
+
     }
 });
 
