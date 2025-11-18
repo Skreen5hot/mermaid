@@ -67,11 +67,9 @@ function _setCurrentDiagram({ diagramId }) {
 function _handleDiagramLoaded(diagram) {
     state.currentDiagram = diagram;
     tracer.logStep('DiagramConcept: Diagram data loaded from storage');
-    bus.notify('diagramContentLoaded', { diagram });
-    // After a diagram is loaded, it becomes the "current" one.
-    // We need to notify the UI to re-render the list to show the new active item.
-    // We re-use the 'diagramsUpdated' event for this, as the UI is already wired to it.
-    bus.notify('diagramsUpdated', { diagrams: state.diagrams, currentDiagramId: state.currentDiagram?.id });
+    bus.notify('diagramContentLoaded', { diagram }); // This handles editor/main view updates.
+    // Fire a specific, lightweight event for just updating the selection in the UI list.
+    bus.notify('diagramSelectionChanged', { currentDiagramId: state.currentDiagram?.id });
 }
 
 function _createDiagram({ name, projectId, content }) {

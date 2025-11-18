@@ -110,6 +110,23 @@ function _renderDiagramList({ diagrams, currentDiagramId }) {
     tracer.logStep('UI: Finished rendering diagram list placeholders');
 }
 
+function _updateActiveDiagramSelection({ currentDiagramId }) {
+    if (!elements['diagram-list']) return;
+
+    // Remove 'active' class from the previously active item
+    const currentlyActive = elements['diagram-list'].querySelector('li.active');
+    if (currentlyActive) {
+        currentlyActive.classList.remove('active');
+    }
+
+    // Add 'active' class to the new item
+    const newActiveItem = elements['diagram-list'].querySelector(`li[data-diagram-id="${currentDiagramId}"]`);
+    if (newActiveItem) {
+        newActiveItem.classList.add('active');
+    }
+    tracer.logStep('UI: Updated active diagram selection');
+}
+
 function _renderEditor({ content }) {
     if (elements['code-editor'] && elements['code-editor'].value !== content) {
         elements['code-editor'].value = content;
@@ -177,6 +194,8 @@ function _attachEventListeners() {
     elements['delete-btn']?.addEventListener('click', () => bus.notify('ui:deleteDiagramClicked'));
     elements['rename-btn']?.addEventListener('click', () => bus.notify('ui:renameDiagramClicked'));
     elements['export-mmd-btn']?.addEventListener('click', () => bus.notify('ui:exportMmdClicked'));
+
+    elements['download-project-btn']?.addEventListener('click', () => bus.notify('ui:downloadProjectClicked'));
 
     elements['code-editor']?.addEventListener('input', (e) => bus.notify('ui:editorContentChanged', { content: e.target.value }));
 
@@ -249,6 +268,7 @@ const actions = {
     'renderMermaidDiagram': _renderMermaidDiagram,
     'renderProjectSelector': _renderProjectSelector,
     'renderDiagramList': _renderDiagramList,
+    'updateActiveDiagramSelection': _updateActiveDiagramSelection,
     'renderEditor': _renderEditor,
     'renderFileInfo': _renderFileInfo,
     'updateButtonStates': _updateButtonStates,

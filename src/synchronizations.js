@@ -84,6 +84,10 @@ diagramConcept.subscribe((event, payload) => {
         uiConcept.listen('renderDiagramList', payload);
         tracer.endTrace(); // End the trace after the final UI update is triggered.
     }
+    if (event === 'diagramSelectionChanged') {
+        uiConcept.listen('updateActiveDiagramSelection', payload);
+        tracer.endTrace(); // End the trace after the selection update.
+    }
     if (event === 'do:showNewDiagramModal') {
         uiConcept.listen('showNewDiagramModal');
     }
