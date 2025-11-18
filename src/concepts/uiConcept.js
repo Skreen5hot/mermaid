@@ -2,171 +2,121 @@ import { createEventBus } from '../utils/eventBus.js';
 
 const bus = createEventBus();
 
-// --- DOM Element References (will be populated on initialize) ---
-let codeTab, diagramTab, codeView, diagramView, codeEditor, diagramContainer,
-    fileInfo, splitViewBtn, projectSidebar, sidebarToggleBtn, projectSelector,
-    diagramList, themeToggle, newProjectBtn, deleteProjectBtn, newDiagramBtn,
-    saveDiagramBtn, deleteDiagramBtn, renameDiagramBtn, newModal, newNameInput,
-    newCancelBtn, newCreateBtn, downloadBtn, exportMmdBtn;
+const initialState = {
+    theme: 'light',
+    isSidebarOpen: true,
+    activeView: 'code', // 'code', 'diagram', or 'split'
+    activeTab: 'code', // 'code' or 'diagram'
+};
 
-let isSplitView = false;
-let isInitialized = false;
+let state = { ...initialState };
 
-// --- Private Functions ---
+let elements = {};
 
-function _renderProjectSelector({ projects, currentProjectId }) {
-    projectSelector.innerHTML = '';
-    if (projects.length === 0) {
-        const option = document.createElement('option');
-        option.textContent = 'No projects yet';
-        option.disabled = true;
-        projectSelector.appendChild(option);
-    } else {
-        projects.forEach(project => {
-            const option = document.createElement('option');
-            option.value = project.id;
-            option.textContent = project.name;
-            projectSelector.appendChild(option);
-        });
-        if (currentProjectId) {
-            projectSelector.value = currentProjectId;
-        }
+function _cacheElements() {
+    const ids = [
+        'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
+        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar',
+        'sidebar-toggle-btn', 'project-selector', 'diagram-list', 'theme-toggle',
+        'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
+        'delete-btn', 'rename-btn', 'new-modal', 'new-name', 'new-cancel-btn',
+        'new-create-btn', 'upload-diagrams-input', 'download-project-btn',
+        'export-mmd-btn', 'render-btn'
+    ];
+    ids.forEach(id => elements[id] = document.getElementById(id));
+}
+
+function _initialize() {
+    _cacheElements();
+    _attachEventListeners();
+    // Other initialization logic...
+}
+
+async function _renderMermaidDiagram({ content }) {
+    if (!elements['diagram-container']) return;
+
+    const diagramContent = content || 'graph TD\n  A["No diagram content"]';
+
+    try {
+        // First, validate the syntax. This will throw an error on failure.
+        await mermaid.parse(diagramContent);
+
+        // If parsing is successful, then render the diagram.
+        const { svg } = await mermaid.render(`mermaid-svg-${Date.now()}`, diagramContent);
+        elements['diagram-container'].innerHTML = svg;
+    } catch (error) {
+        console.error("Mermaid syntax or rendering error:", error);
+        // Display a clean, contained error message instead of letting Mermaid break the UI.
+        // We use .toString() because the error from mermaid.parse() is not a standard Error object.
+        const errorMessage = (error.str || error.message || error.toString()).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const errorStyle = `
+            height: 100%; 
+            overflow-y: auto; 
+            white-space: pre-wrap; 
+            word-break: break-all;
+        `;
+        elements['diagram-container'].innerHTML = `<pre class="mermaid-error" style="${errorStyle}"><strong>Syntax Error:</strong>\n${errorMessage}</pre>`;
     }
 }
 
+function _renderProjectSelector({ projects, currentProjectId }) {
+    if (!elements['project-selector']) return;
+    elements['project-selector'].innerHTML = projects
+        .map(p => `<option value="${p.id}" ${p.id === currentProjectId ? 'selected' : ''}>${p.name}</option>`)
+        .join('');
+}
+
 async function _renderDiagramList({ diagrams, currentDiagramId }) {
-    diagramList.innerHTML = '';
-    if (diagrams.length === 0) {
-        const li = document.createElement('li');
-        li.textContent = 'No diagrams in this project.';
-        li.classList.add('no-diagrams');
-        diagramList.appendChild(li);
-    } else {
-        diagrams.sort((a, b) => a.name.localeCompare(b.name)).forEach(async (diagram) => {
-            const li = document.createElement('li');
-            li.dataset.diagramId = diagram.id;
-            li.title = diagram.name;
+    if (!elements['diagram-list']) return;
 
-            const thumbnailContainer = document.createElement('div');
-            thumbnailContainer.className = 'diagram-thumbnail';
+    if (!diagrams || diagrams.length === 0) {
+        elements['diagram-list'].innerHTML = '<li class="no-diagrams">No diagrams in this project.</li>';
+        return;
+    }
 
-            try {
-                const renderId = `thumbnail-${diagram.id}-${Date.now()}`;
-                const { svg } = await mermaid.render(renderId, diagram.content);
-                thumbnailContainer.innerHTML = svg;
-            } catch (e) {
-                thumbnailContainer.innerHTML = 'Syntax Error';
-                thumbnailContainer.classList.add('thumbnail-error');
-            }
+    const listItemsHtml = await Promise.all(diagrams.map(async (d) => {
+        let thumbnailSvg = '';
+        try {
+            // Ensure valid syntax before rendering to avoid errors
+            await mermaid.parse(d.content || 'graph TD; A(( ))');
+            const { svg } = await mermaid.render(`thumbnail-${d.id}-${Date.now()}`, d.content || 'graph TD; A(( ))');
+            thumbnailSvg = svg;
+        } catch (e) {
+            thumbnailSvg = '<div class="thumbnail-error">Invalid Syntax</div>';
+        }
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'diagram-name';
-            nameSpan.textContent = diagram.name;
+        return `<li data-diagram-id="${d.id}" class="${d.id === currentDiagramId ? 'active' : ''}">
+                    <div class="diagram-thumbnail">${thumbnailSvg}</div>
+                    <span class="diagram-name">${d.name}</span>
+                </li>`;
+    }));
 
-            const editBtn = document.createElement('button');
-            editBtn.className = 'edit-diagram-btn';
-            editBtn.innerHTML = '✏️';
-            editBtn.title = 'Rename diagram';
+    elements['diagram-list'].innerHTML = listItemsHtml.join('');
+}
 
-            li.appendChild(thumbnailContainer);
-            li.appendChild(nameSpan);
-            li.appendChild(editBtn);
-
-            if (diagram.id === currentDiagramId) {
-                li.classList.add('active');
-            }
-
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                bus.notify('ui:renameDiagramClicked', { diagramId: diagram.id });
-            });
-
-            li.addEventListener('click', () => bus.notify('ui:diagramSelected', { diagramId: diagram.id }));
-            diagramList.appendChild(li);
-        });
+function _renderEditor({ content }) {
+    if (elements['code-editor'] && elements['code-editor'].value !== content) {
+        elements['code-editor'].value = content;
     }
 }
 
 function _renderFileInfo({ projectName, diagramName }) {
-    if (diagramName) {
-        fileInfo.textContent = `Project: ${projectName || 'Unknown'} / Editing: ${diagramName}`;
-    } else {
-        fileInfo.textContent = 'New unsaved diagram.';
-    }
+    if (!elements['file-info']) return;
+    elements['file-info'].textContent = `${projectName || 'No Project'} / ${diagramName || 'Unsaved Diagram'}`;
 }
 
-function _renderEditor({ content }) {
-    codeEditor.value = content;
-}
+function _updateButtonStates({ currentDiagram }) {
+    const diagramExists = !!currentDiagram;
+    const isSaved = diagramExists && currentDiagram.id !== null;
 
-async function _renderMermaidDiagram({ content }) {
-    try {
-        const { svg } = await mermaid.render('mermaid-graph', content);
-        diagramContainer.innerHTML = svg;
-    } catch (error) {
-        diagramContainer.innerHTML = `<pre style="color: red;">${error.message}</pre>`;
-    }
-}
-
-function _applyTheme({ theme }) {
-    if (theme === 'dark') {
-        document.body.classList.add('dark-mode');
-        themeToggle.checked = true;
-        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-    } else {
-        document.body.classList.remove('dark-mode');
-        themeToggle.checked = false;
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
-    }
-}
-
-function _initializeTheme() {
-    const savedTheme = localStorage.getItem('mermaid-ide-theme') || 'light';
-    _applyTheme({ theme: savedTheme });
-}
-
-function _toggleSplitView() {
-    const main = document.querySelector('main');
-    isSplitView = main.classList.toggle('split-view-active');
-    splitViewBtn.classList.toggle('active', isSplitView);
-
-    if (isSplitView) {
-        codeView.classList.add('active');
-        diagramView.classList.add('active');
-        codeTab.setAttribute('disabled', 'true');
-        diagramTab.setAttribute('disabled', 'true');
-        bus.notify('ui:renderDiagramRequested');
-    } else {
-        codeTab.removeAttribute('disabled');
-        diagramTab.removeAttribute('disabled');
-        diagramView.classList.remove('active');
-        _switchTab({ tab: 'code' });
-    }
-}
-
-function _switchTab({ tab }) {
-    if (isSplitView) return;
-
-    if (tab === 'diagram') {
-        codeTab.classList.remove('active');
-        codeView.classList.remove('active');
-        diagramTab.classList.add('active');
-        diagramView.classList.add('active');
-        codeTab.setAttribute('aria-selected', 'false');
-        diagramTab.setAttribute('aria-selected', 'true');
-        bus.notify('ui:renderDiagramRequested');
-    } else {
-        diagramTab.classList.remove('active');
-        diagramView.classList.remove('active');
-        codeTab.classList.add('active');
-        codeView.classList.add('active');
-        diagramTab.setAttribute('aria-selected', 'false');
-        codeTab.setAttribute('aria-selected', 'true');
-    }
+    if (elements['save-btn']) elements['save-btn'].disabled = !diagramExists;
+    if (elements['delete-btn']) elements['delete-btn'].disabled = !isSaved;
+    if (elements['rename-btn']) elements['rename-btn'].disabled = !isSaved;
+    if (elements['export-mmd-btn']) elements['export-mmd-btn'].disabled = !isSaved;
 }
 
 function _downloadFile({ filename, content, mimeType }) {
-    const blob = new Blob([content], { type: mimeType });
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -178,187 +128,127 @@ function _downloadFile({ filename, content, mimeType }) {
 }
 
 function _showNewDiagramModal() {
-    newNameInput.value = '';
-    newModal.style.display = 'flex';
-    newNameInput.focus();
+    if (elements['new-modal']) {
+        elements['new-modal'].style.display = 'flex';
+        elements['new-name'].value = '';
+        elements['new-name'].focus();
+    }
 }
 
 function _hideNewDiagramModal() {
-    newModal.style.display = 'none';
-}
-
-function _updateButtonStates({ currentDiagram }) {
-    // A diagram is considered "active" for saving/deleting/renaming only if it has an ID.
-    // The save button is an exception: it should be enabled for unsaved diagrams to trigger the save-as flow.
-    console.log('[UI] Updating button states based on diagram:', currentDiagram);
-
-    const hasActiveDiagram = !!currentDiagram;
-    const isSavedDiagram = !!currentDiagram?.id;
-
-    if (saveDiagramBtn) {
-        saveDiagramBtn.disabled = !hasActiveDiagram; // Enable for any diagram, saved or not.
-        deleteDiagramBtn.disabled = !isSavedDiagram; // Only enable for saved diagrams.
-        renameDiagramBtn.disabled = !isSavedDiagram; // Only enable for saved diagrams.
-    } else {
-        // This log helps catch initialization errors.
-        console.error('[UI] Could not find toolbar buttons to update their state.');
+    if (elements['new-modal']) {
+        elements['new-modal'].style.display = 'none';
     }
 }
 
 function _attachEventListeners() {
-    projectSelector.addEventListener('change', (event) => {
-        bus.notify('ui:projectSelected', { projectId: event.target.value });
+    elements['project-selector']?.addEventListener('change', (e) => bus.notify('ui:projectSelected', { projectId: e.target.value }));
+    elements['new-project-btn']?.addEventListener('click', () => {
+        const name = prompt('Enter new project name:');
+        if (name) bus.notify('ui:newProjectClicked', { name });
     });
+    elements['delete-project-btn']?.addEventListener('click', () => bus.notify('ui:deleteProjectClicked'));
 
-    sidebarToggleBtn.addEventListener('click', () => {
-        projectSidebar.classList.toggle('sidebar-collapsed');
-        sidebarToggleBtn.classList.toggle('sidebar-collapsed');
-    });
-
-    themeToggle.addEventListener('change', () => {
-        const newTheme = themeToggle.checked ? 'dark' : 'light';
-        localStorage.setItem('mermaid-ide-theme', newTheme);
-        _applyTheme({ theme: newTheme });
-        bus.notify('ui:themeChanged');
-    });
-
-    newProjectBtn.addEventListener('click', () => {
-        const name = prompt("Enter new project name:");
-        if (name && name.trim()) {
-            bus.notify('ui:newProjectClicked', { name: name.trim() });
+    elements['diagram-list']?.addEventListener('click', (e) => {
+        if (e.target.tagName === 'LI') {
+            bus.notify('ui:diagramSelected', { diagramId: parseInt(e.target.dataset.diagramId, 10) });
         }
     });
 
-    deleteProjectBtn.addEventListener('click', () => {
-        bus.notify('ui:deleteProjectClicked');
-    });
+    elements['new-btn']?.addEventListener('click', () => bus.notify('ui:diagramSelected', { diagramId: null }));
+    elements['save-btn']?.addEventListener('click', () => bus.notify('ui:saveDiagramClicked'));
+    elements['delete-btn']?.addEventListener('click', () => bus.notify('ui:deleteDiagramClicked'));
+    elements['rename-btn']?.addEventListener('click', () => bus.notify('ui:renameDiagramClicked'));
+    elements['export-mmd-btn']?.addEventListener('click', () => bus.notify('ui:exportMmdClicked'));
 
-    splitViewBtn.addEventListener('click', () => {
-        bus.notify('ui:splitViewToggled');
-    });
+    elements['code-editor']?.addEventListener('input', (e) => bus.notify('ui:editorContentChanged', { content: e.target.value }));
 
-    codeTab.addEventListener('click', () => bus.notify('ui:tabSelected', { tab: 'code' }));
-    diagramTab.addEventListener('click', () => bus.notify('ui:tabSelected', { tab: 'diagram' }));
-
-    newDiagramBtn.addEventListener('click', () => {
-        _showNewDiagramModal();
-    });
-
-    newCancelBtn.addEventListener('click', _hideNewDiagramModal);
-
-    newCreateBtn.addEventListener('click', () => {
-        const name = newNameInput.value.trim();
+    elements['new-create-btn']?.addEventListener('click', () => {
+        const name = elements['new-name'].value.trim();
         if (name) {
             bus.notify('ui:createDiagramClicked', { name });
             _hideNewDiagramModal();
-        } else {
-            alert('Please enter a name for the diagram.');
         }
     });
+    elements['new-cancel-btn']?.addEventListener('click', _hideNewDiagramModal);
 
-    saveDiagramBtn.addEventListener('click', () => {
-        bus.notify('ui:saveDiagramClicked');
+    elements['render-btn']?.addEventListener('click', () => bus.notify('ui:renderDiagramRequested'));
+
+    // Sidebar toggle
+    elements['sidebar-toggle-btn']?.addEventListener('click', () => {
+        elements['project-sidebar'].classList.toggle('closed');
+        elements['sidebar-toggle-btn'].classList.toggle('closed');
     });
 
-    deleteDiagramBtn.addEventListener('click', () => {
-        bus.notify('ui:deleteDiagramClicked');
-    });
-
-    renameDiagramBtn.addEventListener('click', () => {
-        bus.notify('ui:renameDiagramClicked');
-    });
-
-    codeEditor.addEventListener('input', () => {
-        bus.notify('ui:editorContentChanged', { content: codeEditor.value });
-    });
-
-    downloadBtn.addEventListener('click', () => {
-        bus.notify('ui:downloadProjectClicked');
-    });
-
-    exportMmdBtn.addEventListener('click', () => {
-        bus.notify('ui:exportMmdClicked');
-    });
+    // Tabs
+    elements['code-tab']?.addEventListener('click', () => _switchTab('code'));
+    elements['diagram-tab']?.addEventListener('click', () => _switchTab('diagram'));
+    elements['split-view-btn']?.addEventListener('click', () => _toggleSplitView());
 }
 
-// --- Public Actions ---
+function _switchTab(tabName) {
+    state.activeTab = tabName;
+    const isSplit = state.activeView === 'split';
+
+    if (!isSplit) {
+        elements['code-tab'].classList.toggle('active', tabName === 'code');
+        elements['diagram-tab'].classList.toggle('active', tabName === 'diagram');
+        elements['code-view'].classList.toggle('active', tabName === 'code');
+        elements['diagram-view'].classList.toggle('active', tabName === 'diagram');
+    }
+
+    if (tabName === 'diagram' || isSplit) {
+        bus.notify('ui:renderDiagramRequested');
+    }
+}
+
+function _toggleSplitView() {
+    if (state.activeView !== 'split') {
+        state.activeView = 'split';
+        // Add a class to the parent container to enable flexbox layout
+        document.getElementById('content-area').classList.add('split-view-active');
+        elements['code-view'].classList.add('active', 'split-view');
+        elements['diagram-view'].classList.add('active', 'split-view');
+        elements['split-view-btn'].classList.add('active');
+        bus.notify('ui:renderDiagramRequested');
+    } else {
+        state.activeView = state.activeTab;
+        // Remove the class from the parent container
+        document.getElementById('content-area').classList.remove('split-view-active');
+        elements['code-view'].classList.remove('split-view');
+        elements['diagram-view'].classList.remove('split-view');
+        elements['split-view-btn'].classList.remove('active');
+        _switchTab(state.activeTab); // Re-apply single-tab view
+    }
+}
+
+function _reset() {
+    state = { ...initialState };
+    elements = {};
+}
 
 const actions = {
+    'initialize': _initialize,
+    'renderMermaidDiagram': _renderMermaidDiagram,
     'renderProjectSelector': _renderProjectSelector,
     'renderDiagramList': _renderDiagramList,
-    'renderFileInfo': _renderFileInfo,
     'renderEditor': _renderEditor,
-    'renderMermaidDiagram': _renderMermaidDiagram,
-    'applyTheme': _applyTheme,
-    'toggleSplitView': _toggleSplitView,
-    'switchTab': _switchTab,
+    'renderFileInfo': _renderFileInfo,
+    'updateButtonStates': _updateButtonStates,
     'downloadFile': _downloadFile,
     'showNewDiagramModal': _showNewDiagramModal,
-    'updateButtonStates': _updateButtonStates,
-    'hideNewDiagramModal': _hideNewDiagramModal,
-    'initialize': () => {
-        // Prevent multiple initializations
-        if (isInitialized || typeof document === 'undefined') return;
-
-        // Populate elements from the document
-        codeTab = document.getElementById('code-tab');
-        diagramTab = document.getElementById('diagram-tab');
-        codeView = document.getElementById('code-view');
-        diagramView = document.getElementById('diagram-view');
-        codeEditor = document.getElementById('code-editor');
-        diagramContainer = document.getElementById('diagram-container');
-        fileInfo = document.getElementById('file-info');
-        splitViewBtn = document.getElementById('split-view-btn');
-        projectSidebar = document.getElementById('project-sidebar');
-        sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
-        projectSelector = document.getElementById('project-selector');
-        diagramList = document.getElementById('diagram-list');
-        themeToggle = document.getElementById('theme-toggle');
-        newProjectBtn = document.getElementById('new-project-btn');
-        deleteProjectBtn = document.getElementById('delete-project-btn');
-        newDiagramBtn = document.getElementById('new-btn');
-        saveDiagramBtn = document.getElementById('save-btn');
-        deleteDiagramBtn = document.getElementById('delete-btn');
-        renameDiagramBtn = document.getElementById('rename-btn');
-        newModal = document.getElementById('new-modal');
-        newNameInput = document.getElementById('new-name');
-        newCancelBtn = document.getElementById('new-cancel-btn');
-        newCreateBtn = document.getElementById('new-create-btn');
-        downloadBtn = document.getElementById('download-project-btn');
-        exportMmdBtn = document.getElementById('export-mmd-btn');
-
-        _attachEventListeners();
-        _initializeTheme();
-        isInitialized = true;
-    },
-    'reset': () => {
-        isSplitView = false;
-        isInitialized = false;
-    },
-    // --- Test-only methods ---
-    setTestElements: (elements) => {
-        saveDiagramBtn = elements.saveDiagramBtn;
-        deleteDiagramBtn = elements.deleteDiagramBtn;
-        renameDiagramBtn = elements.renameDiagramBtn;
-        // Add other elements as needed for tests
-    },
-    getTestElements: () => {
-        // Expose elements for assertions in tests
-        return { saveDiagramBtn, deleteDiagramBtn, renameDiagramBtn };
-    }
+    'switchTab': _switchTab,
+    'toggleSplitView': _toggleSplitView,
 };
 
 export const uiConcept = {
     subscribe: bus.subscribe,
     notify: bus.notify,
-    reset: actions.reset, // Expose for testing
+    getState: () => ({ ...state }),
+    reset: _reset,
     listen(event, payload) {
         if (actions[event]) {
             actions[event](payload);
-        } else if (event === 'setTestElements' || event === 'getTestElements') {
-            // Allow test methods to be called via listen for convenience
-            // This is a pattern to avoid exporting them on the main object.
-            return actionsevent;
         }
     }
 };

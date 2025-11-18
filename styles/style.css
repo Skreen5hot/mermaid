@@ -119,24 +119,20 @@ main {
 }
 
 /* --- Split View Styles --- */
-main.split-view-active #content-area {
+/* When split-view-active is applied to content-area, make it a row flex container */
+#content-area.split-view-active {
   display: flex;
   flex-direction: row;
 }
 
-main.split-view-active .content-view {
-  display: flex;
-  position: relative;
+#content-area.split-view-active .content-view {
+  /* This is the key fix: override absolute positioning to allow flexbox to work */
+  position: relative; 
   width: 50%;
-  height: 100%;
-  border-left: 1px solid var(--border-color);
 }
 
-main.split-view-active #code-view {
-  border-left: none;
-}
-main.split-view-active #diagram-view {
-  background-color: var(--secondary-bg);
+#content-area.split-view-active #code-view {
+  border-right: 1px solid var(--border-color);
 }
 
 /* Code View */
