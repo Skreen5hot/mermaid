@@ -1,4 +1,4 @@
-import { diagramConcept } from './src/concepts/diagramConcept.js';
+import { diagramConcept } from '../../src/concepts/diagramConcept.js';
 import assert from './test/framework/assert.js';
 
 function captureEvents(concept) {
