@@ -93,6 +93,12 @@ main {
   font-weight: bold;
 }
 
+#tabs button.split-active-tab {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none; /* Prevent clicks */
+}
+
 #tabs #split-view-btn {
   margin-left: auto;
   border-left: 1px solid var(--border-color);

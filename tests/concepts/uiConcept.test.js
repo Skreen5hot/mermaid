@@ -156,3 +156,27 @@ describe('UI Concept', () => {
         assert.strictEqual(createEvent.payload.name, 'My New Diagram', 'Payload should contain the new diagram name');
     });
 });
+
+describe('UI Concept - Split View Tabs', () => {
+    function beforeEach() {
+        setupMockDOM();
+        uiConcept.reset();
+        uiConcept.setMermaid(mockMermaid);
+        uiConcept.listen('initialize');
+    }
+
+    it('should gray out Code and Diagram tabs when Split view is active', () => {
+        beforeEach();
+        const splitViewBtn = mockElements['split-view-btn'];
+        const codeTab = mockElements['code-tab'];
+        const diagramTab = mockElements['diagram-tab'];
+
+        splitViewBtn._trigger('click'); // Activate split view
+        assert.ok(codeTab.classList.contains('split-active-tab'), 'Code tab should be grayed out');
+        assert.ok(diagramTab.classList.contains('split-active-tab'), 'Diagram tab should be grayed out');
+
+        splitViewBtn._trigger('click'); // Deactivate split view
+        assert.ok(!codeTab.classList.contains('split-active-tab'), 'Code tab should not be grayed out');
+        assert.ok(!diagramTab.classList.contains('split-active-tab'), 'Diagram tab should not be grayed out');
+    });
+});

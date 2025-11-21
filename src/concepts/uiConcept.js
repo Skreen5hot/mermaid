@@ -297,10 +297,14 @@ function _toggleSplitView() {
         elements['code-view'].classList.add('active', 'split-view');
         elements['diagram-view'].classList.add('active', 'split-view');
         elements['split-view-btn'].classList.add('active');
+        // Gray out Code and Diagram tabs
+        elements['code-tab'].classList.add('split-active-tab');
+        elements['diagram-tab'].classList.add('split-active-tab');
         // Reset widths to allow resizing
         elements['code-view'].style.width = '50%';
         elements['diagram-view'].style.width = '50%';
         bus.notify('ui:renderDiagramRequested');
+
     } else {
         state.activeView = state.activeTab;
         // Remove the class from the parent container
@@ -309,6 +313,9 @@ function _toggleSplitView() {
         elements['code-view'].classList.remove('split-view');
         elements['diagram-view'].classList.remove('split-view');
         elements['split-view-btn'].classList.remove('active');
+        // Restore Code and Diagram tabs
+        elements['code-tab'].classList.remove('split-active-tab');
+        elements['diagram-tab'].classList.remove('split-active-tab');
         _switchTab(state.activeTab); // Re-apply single-tab view
     }
 }
