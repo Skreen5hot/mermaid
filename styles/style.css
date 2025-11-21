@@ -265,7 +265,7 @@ main.split-view-active #diagram-toolbar {
   overflow: hidden;
 }
 
-#project-sidebar.sidebar-collapsed {
+#project-sidebar.closed {
   width: 0;
 }
 
@@ -300,8 +300,7 @@ main.split-view-active #diagram-toolbar {
   color: var(--text-color);
 }
 
-#project-sidebar.sidebar-collapsed #sidebar-toggle-btn {
-  /* This rule is now applied to the button directly, not via its parent */
+#sidebar-toggle-btn.closed {
   transform: rotate(180deg);
 }
 

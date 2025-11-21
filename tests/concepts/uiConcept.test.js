@@ -124,4 +124,21 @@ describe('UI Concept', () => {
         assert.strictEqual(received[0].event, 'ui:projectSelected', 'Event name should be correct');
         assert.strictEqual(received[0].payload.projectId, '3', 'Payload should contain the selected project ID');
     });
+
+    it("should toggle the 'closed' class on the sidebar and toggle button when clicked", () => {
+        beforeEach();
+        const sidebar = mockElements['project-sidebar'];
+        const toggleBtn = mockElements['sidebar-toggle-btn'];
+
+        // Simulate the first click to close the sidebar
+        toggleBtn._trigger('click');
+
+        assert.ok(sidebar.classList.contains('closed'), 'Sidebar should have the "closed" class after first click');
+        assert.ok(toggleBtn.classList.contains('closed'), 'Toggle button should have the "closed" class after first click');
+
+        // Simulate the second click to open the sidebar
+        toggleBtn._trigger('click');
+        assert.ok(!sidebar.classList.contains('closed'), 'Sidebar should not have the "closed" class after second click');
+        assert.ok(!toggleBtn.classList.contains('closed'), 'Toggle button should not have the "closed" class after second click');
+    });
 });
