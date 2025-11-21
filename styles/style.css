@@ -540,6 +540,12 @@ textarea {
   margin-top: 20px;
 }
 
+.modal-buttons button:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+  color: #ecf0f1;
+}
+
 #open-modal-list-models,
 #open-modal-list-processes {
   list-style-type: none;

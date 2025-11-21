@@ -91,10 +91,22 @@ function setupAllMocks() {
             id: id,
             innerHTML: '',
             style: {},
+            value: '',
             listeners: {},
+            focus: function() { this._isFocused = true; },
+            _isFocused: false,
             addEventListener: function(event, callback) { this.listeners[event] = callback; },
             _trigger: function(event) { this.listeners[event]?.({ target: this }); },
-            classList: { add: () => {}, remove: () => {}, toggle: () => {} }
+            classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+            // Add a mock querySelector. It needs to return an object with a classList
+            // to prevent the next line in uiConcept from crashing.
+            querySelector: function(selector) {
+                // Return a mock element that has a classList, or null.
+                return { 
+                    // It needs both `remove` and `add` to satisfy the _updateActiveDiagramSelection function.
+                    classList: { remove: () => {}, add: () => {} } 
+                };
+            }
         };
     });
     global.document = { getElementById: (id) => mockElements[id] };
@@ -153,5 +165,33 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.strictEqual(mockDbStore.projects.length, 2, 'There should be two projects in the mock DB (Default + New)');
         assert.strictEqual(mockDbStore.projects[0].name, 'Default Project', 'The first project should be the default');
         assert.strictEqual(mockDbStore.projects[1].name, 'New Test Project', 'The second project should be our new one');
+    });
+
+    it('UI -> Diagram -> UI: Creating a new diagram should auto-select it and populate the editor', async () => {
+        beforeEach();
+        // Flush initial load
+        flushMockRequests(); // DB open
+        flushMockRequests(); // Project list
+        flushMockRequests(); // Default diagram save
+        flushMockRequests(); // Diagram list
+
+        // Arrange: Simulate user clicking the "New Diagram" button and filling out the modal
+        uiConcept.notify('ui:createDiagramClicked', { name: 'My Auto-Selected Diagram' });
+
+        // Act: Flush the async requests
+        flushMockRequests(); // DB put for the new diagram
+        flushMockRequests(); // DB getAll for the diagram list reload
+
+        // Assert
+        const diagramState = diagramConcept.getState();
+        assert.ok(diagramState.currentDiagram, 'A current diagram should be set');
+        assert.strictEqual(diagramState.currentDiagram.name, 'My Auto-Selected Diagram', 'The correct diagram should be selected');
+
+        const editor = mockElements['code-editor'];
+        assert.strictEqual(editor.value, diagramState.currentDiagram.content, 'Editor should be populated with the new diagram content');
+        
+        // Note: The focus assertion is tricky in this mock setup, but we can check our mock property.
+        // In a real browser test, you would check document.activeElement.
+        assert.ok(editor._isFocused, 'Editor should be focused after the new diagram is loaded');
     });
 });

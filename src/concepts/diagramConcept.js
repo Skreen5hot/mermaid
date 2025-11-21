@@ -144,6 +144,11 @@ const _debouncedLoadDiagrams = debounce((projectId) => {
 }, 100);
 
 function _handleDiagramSaved(savedDiagram) {
+    // After a diagram is saved, immediately set it as the current diagram.
+    // This provides instant feedback to the user by loading it into the editor.
+    _handleDiagramLoaded(savedDiagram);
+
+    // Then, trigger a debounced reload of the diagram list to update the sidebar.
     _debouncedLoadDiagrams(savedDiagram.projectId);
 }
 

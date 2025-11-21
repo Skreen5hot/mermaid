@@ -49,6 +49,10 @@ function setupMockDOM() {
                 (this.listeners[event] || []).forEach(cb => cb({ target: this, ...eventData }));
             }
         };
+        // Add focus mock
+        mockElements[id].focus = () => {
+            mockElements[id]._isFocused = true;
+        };
     });
 
     // Mock document
@@ -140,5 +144,33 @@ describe('UI Concept', () => {
         toggleBtn._trigger('click');
         assert.ok(!sidebar.classList.contains('closed'), 'Sidebar should not have the "closed" class after second click');
         assert.ok(!toggleBtn.classList.contains('closed'), 'Toggle button should not have the "closed" class after second click');
+    });
+
+    it('should handle the new diagram flow via modal', () => {
+        beforeEach();
+        const received = [];
+        uiConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+        const newBtn = mockElements['new-btn'];
+        const newModal = mockElements['new-modal'];
+        const newNameInput = mockElements['new-name'];
+        const createBtn = mockElements['new-create-btn'];
+
+        // 1. User clicks "New" button
+        newBtn._trigger('click');
+        assert.strictEqual(newModal.style.display, 'flex', 'Modal should be displayed');
+        assert.ok(createBtn.disabled, 'Create button should be disabled initially');
+
+        // 2. User types a name
+        newNameInput.value = 'My New Diagram';
+        newNameInput._trigger('input');
+        assert.ok(!createBtn.disabled, 'Create button should be enabled after typing a name');
+
+        // 3. User clicks "Create"
+        createBtn._trigger('click');
+        assert.strictEqual(newModal.style.display, 'none', 'Modal should be hidden after creation');
+        const createEvent = received.find(r => r.event === 'ui:createDiagramClicked');
+        assert.ok(createEvent, 'Should have emitted a "ui:createDiagramClicked" event');
+        assert.strictEqual(createEvent.payload.name, 'My New Diagram', 'Payload should contain the new diagram name');
     });
 });

@@ -175,6 +175,7 @@ function _updateActiveDiagramSelection({ currentDiagramId }) {
 function _renderEditor({ content }) {
     if (elements['code-editor'] && elements['code-editor'].value !== content) {
         elements['code-editor'].value = content;
+        elements['code-editor'].focus(); // Set focus on the editor
     }
 }
 
@@ -209,6 +210,7 @@ function _showNewDiagramModal() {
     if (elements['new-modal']) {
         elements['new-modal'].style.display = 'flex';
         elements['new-name'].value = '';
+        elements['new-create-btn'].disabled = true; // Disable create button initially
         elements['new-name'].focus();
     }
 }
@@ -236,7 +238,10 @@ function _attachEventListeners() {
         }
     });
 
-    elements['new-btn']?.addEventListener('click', () => bus.notify('ui:diagramSelected', { diagramId: null }));
+    // --- NEW "NEW" BUTTON FLOW ---
+    // When the user clicks "New", immediately show the modal to get a name.
+    elements['new-btn']?.addEventListener('click', () => _showNewDiagramModal());
+
     elements['save-btn']?.addEventListener('click', () => bus.notify('ui:saveDiagramClicked'));
     elements['delete-btn']?.addEventListener('click', () => bus.notify('ui:deleteDiagramClicked'));
     elements['rename-btn']?.addEventListener('click', () => bus.notify('ui:renameDiagramClicked'));
@@ -245,6 +250,11 @@ function _attachEventListeners() {
     elements['download-project-btn']?.addEventListener('click', () => bus.notify('ui:downloadProjectClicked'));
 
     elements['code-editor']?.addEventListener('input', (e) => bus.notify('ui:editorContentChanged', { content: e.target.value }));
+
+    // Add validation to the new diagram modal input
+    elements['new-name']?.addEventListener('input', (e) => {
+        elements['new-create-btn'].disabled = e.target.value.trim() === '';
+    });
 
     elements['new-create-btn']?.addEventListener('click', () => {
         const name = elements['new-name'].value.trim();
