@@ -1,89 +1,86 @@
+import { describe, it, assert, beforeEach } from '../test-utils.js';
 import { diagramConcept } from '../../src/concepts/diagramConcept.js';
-import { describe, it } from '../test-helpers.js';
-import assert from '../../src/assert.js';
 
 describe('Diagram Concept', () => {
-  it('should initialize with a default state', () => {
-    diagramConcept.reset();
-    const state = diagramConcept.getState();
 
-    assert.ok(Array.isArray(state.diagrams), 'diagrams should be an array');
-    assert.strictEqual(state.diagrams.length, 0, 'diagrams should be empty');
-    assert.strictEqual(state.currentDiagram, null, 'currentDiagram should be null');
+  beforeEach(() => {
+    // Reset state before each test
+    diagramConcept.state.diagrams = [];
+    diagramConcept.state.activeDiagram = null;
+    // Clear subscribers
+    const subscribers = diagramConcept.subscribe(() => {});
+    if (subscribers) subscribers.clear();
   });
 
-  it("listen('setDiagrams') should update the diagrams array and notify", () => {
-    diagramConcept.reset();
+  it('should have a default state', () => {
+    assert.deepStrictEqual(diagramConcept.state.diagrams, [], 'diagrams should be an empty array');
+    assert.strictEqual(diagramConcept.state.activeDiagram, null, 'activeDiagram should be null');
+  });
+
+  it("actions.setDiagrams() should update the diagrams array and notify", () => {
     const received = [];
     diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
 
     const newDiagrams = [{ id: 1, name: 'Diagram 1' }];
-    diagramConcept.listen('setDiagrams', { diagrams: newDiagrams });
+    diagramConcept.actions.setDiagrams(newDiagrams);
 
-    const state = diagramConcept.getState();
-    assert.strictEqual(state.diagrams, newDiagrams, 'State should be updated with new diagrams');
+    assert.strictEqual(diagramConcept.state.diagrams, newDiagrams, 'State should be updated with new diagrams');
 
-    const notification = received.find(r => r.event === 'diagramsUpdated');
-    assert.ok(notification, 'Should have emitted a diagramsUpdated event');
-    assert.strictEqual(notification.payload.diagrams, newDiagrams, 'Payload should be the new diagrams array');
+    const notification = received.find(r => r.event === 'diagramsLoaded');
+    assert.ok(notification, 'Should have emitted a diagramsLoaded event');
+    assert.strictEqual(notification.payload, newDiagrams, 'Payload should be the new diagrams array');
   });
 
-  it("listen('setCurrentDiagram') should emit a 'do:loadDiagram' event", () => {
-    diagramConcept.reset();
+  it("actions.loadDiagramContent() should emit a 'diagramContentLoadRequested' event", () => {
     const received = [];
     diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
 
     const diagramId = 'diag-123';
-    diagramConcept.listen('setCurrentDiagram', { diagramId });
+    diagramConcept.actions.loadDiagramContent({ diagramId });
 
     assert.strictEqual(received.length, 1, 'Should have emitted one event');
-    assert.strictEqual(received[0].event, 'do:loadDiagram', 'Should emit do:loadDiagram event');
+    assert.strictEqual(received[0].event, 'diagramContentLoadRequested', 'Should emit diagramContentLoadRequested event');
     assert.strictEqual(received[0].payload.diagramId, diagramId, 'Payload should be the diagram ID');
   });
 
-  it("listen('handleDiagramLoaded') should update currentDiagram and notify", () => {
-    diagramConcept.reset();
+  it("actions.setActiveDiagram() should update activeDiagram and notify", () => {
     const received = [];
     diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
 
     const diagram = { id: 'diag-123', name: 'Loaded Diagram', content: 'graph TD' };
-    diagramConcept.listen('handleDiagramLoaded', diagram);
+    diagramConcept.actions.setActiveDiagram(diagram);
 
-    const state = diagramConcept.getState();
-    assert.strictEqual(state.currentDiagram, diagram, 'State should be updated with the loaded diagram');
+    assert.strictEqual(diagramConcept.state.activeDiagram, diagram, 'State should be updated with the loaded diagram');
 
-    const notification = received.find(r => r.event === 'diagramContentLoaded');
-    assert.ok(notification, 'Should have emitted a diagramContentLoaded event');
-    assert.strictEqual(notification.payload.diagram, diagram, 'Payload should be the loaded diagram');
+    const notification = received.find(r => r.event === 'activeDiagramSet');
+    assert.ok(notification, 'Should have emitted an activeDiagramSet event');
+    assert.strictEqual(notification.payload, diagram, 'Payload should be the loaded diagram');
   });
 
-  it("listen('updateCurrentDiagramContent') should update content on the currentDiagram state", () => {
-    diagramConcept.reset();
+  it("actions.updateActiveDiagramContent() should update content on the activeDiagram state", () => {
     // First, set a diagram in state
     const initialDiagram = { id: 'diag-123', name: 'My Diagram', content: 'graph TD' };
-    diagramConcept.listen('handleDiagramLoaded', initialDiagram);
+    diagramConcept.actions.setActiveDiagram(initialDiagram);
 
     const newContent = 'graph LR; A-->B;';
-    diagramConcept.listen('updateCurrentDiagramContent', { content: newContent });
+    diagramConcept.actions.updateActiveDiagramContent(newContent);
 
-    const state = diagramConcept.getState();
-    assert.strictEqual(state.currentDiagram.content, newContent, 'Diagram content should be updated');
+    assert.strictEqual(diagramConcept.state.activeDiagram.content, newContent, 'Diagram content should be updated');
   });
 
-  it("listen('saveCurrentDiagram') should emit a 'do:saveDiagram' event for an existing diagram", () => {
-    diagramConcept.reset();
+  it("actions.saveActiveDiagram() should emit a 'diagramSaveRequested' event for an existing diagram", () => {
     const received = [];
     diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
 
     // Set an existing diagram (it has an ID)
     const existingDiagram = { id: 'diag-456', name: 'Existing', content: 'A-->B' };
-    diagramConcept.listen('handleDiagramLoaded', existingDiagram);
+    diagramConcept.actions.setActiveDiagram(existingDiagram);
 
     // Now trigger the save
-    diagramConcept.listen('saveCurrentDiagram');
+    diagramConcept.actions.saveActiveDiagram();
 
-    const notification = received.find(r => r.event === 'do:saveDiagram');
-    assert.ok(notification, "Should have emitted a 'do:saveDiagram' event");
-    assert.strictEqual(notification.payload.diagramData, existingDiagram, 'Payload should be the current diagram data');
+    const notification = received.find(r => r.event === 'diagramSaveRequested');
+    assert.ok(notification, "Should have emitted a 'diagramSaveRequested' event");
+    assert.strictEqual(notification.payload.diagram, existingDiagram, 'Payload should be the current diagram data');
   });
 });

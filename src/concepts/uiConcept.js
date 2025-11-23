@@ -1,11 +1,19 @@
-import { createEventBus } from '../utils/eventBus.js';
-import { tracer } from '../utils/tracer.js';
+/**
+ * @module uiConcept
+ * @description Manages all direct DOM manipulations and UI state.
+ * It listens to DOM events and notifies the system. It also exposes actions
+ * for other concepts to trigger UI updates via the synchronization layer.
+ */
 
 let mermaid = globalThis.mermaid;
 
-const bus = createEventBus();
+const subscribers = new Set();
 
 const initialState = {
+    projects: [],
+    diagrams: [],
+    activeProjectId: null, // This is UI state, but driven by projectConcept
+    activeDiagram: null,
     theme: 'light',
     isSidebarOpen: true,
     activeView: 'code', // 'code', 'diagram', or 'split'
@@ -17,6 +25,15 @@ let state = { ...initialState };
 
 let elements = {};
 
+/**
+ * Notifies all subscribed listeners of an event.
+ * @param {string} event - The name of the event.
+ * @param {*} payload - The data associated with the event.
+ */
+function notify(event, payload) {
+    for (const subscriber of subscribers) subscriber(event, payload);
+}
+
 function _cacheElements() {
     const ids = [
         'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
@@ -24,8 +41,14 @@ function _cacheElements() {
         'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
         'delete-btn', 'rename-btn', 'fullscreen-btn', 'new-modal', 'new-name', 'new-cancel-btn',
         'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
-        'split-view-resizer',
-        'export-mmd-btn', 'render-btn'
+        'split-view-resizer', 'connect-project-modal', 'connect-provider',
+        'connect-repo-path', 'connect-token', 'connect-password',
+        'connect-password-confirm', 'connect-password-error',
+        'connect-cancel-btn', 'connect-submit-btn', 'unlock-session-modal',
+        'unlock-project-name', 'unlock-password', 'unlock-error',
+        'unlock-cancel-btn', 'unlock-submit-btn', 'toast-container',
+        'export-mmd-btn', 'render-btn',
+        'sync-status', 'sync-status-icon', 'sync-status-text'
     ];
     ids.forEach(id => elements[id] = document.getElementById(id));
 }
@@ -105,13 +128,12 @@ async function _renderMermaidDiagram({ content }) {
     }
 }
 
-function _renderProjectSelector({ projects, currentProjectId }) {
+function _renderProjectSelector({ projects, activeProjectId }) {
     if (!elements['project-selector']) return;
     elements['project-selector'].innerHTML = projects
-        .map(p => `<option value="${p.id}" ${p.id === currentProjectId ? 'selected' : ''}>${p.name}</option>`)
+        .map(p => `<option value="${p.id}" ${p.id === activeProjectId ? 'selected' : ''}>${p.name}</option>`)
         .join('');
 }
-
 async function _renderSingleThumbnail(diagram) {
     const thumbnailContainer = document.getElementById(`thumbnail-container-${diagram.id}`);
     if (!thumbnailContainer) return;
@@ -127,7 +149,7 @@ async function _renderSingleThumbnail(diagram) {
     thumbnailContainer.innerHTML = thumbnailSvg;
 }
 
-function _renderDiagramList({ diagrams, currentDiagramId }) {
+function _renderDiagramList({ diagrams, activeDiagramId }) {
     if (!elements['diagram-list']) return;
 
     if (!diagrams || diagrams.length === 0) {
@@ -137,12 +159,12 @@ function _renderDiagramList({ diagrams, currentDiagramId }) {
     
     // 1. Render the list immediately with placeholders
     const listItemsHtml = diagrams.map(d => {
-        const isActive = d.id === currentDiagramId ? 'active' : '';
+        const isActive = d.id === activeDiagramId ? 'active' : '';
         return `<li data-diagram-id="${d.id}" class="${isActive}">
                     <div class="diagram-thumbnail" id="thumbnail-container-${d.id}">
                         <div class="thumbnail-loader"></div>
                     </div>
-                    <span class="diagram-name">${d.name}</span>
+                    <span class="diagram-name">${d.title}</span>
                 </li>`;
     }).join('');
 
@@ -150,12 +172,9 @@ function _renderDiagramList({ diagrams, currentDiagramId }) {
 
     // 2. Asynchronously render each thumbnail, allowing the UI to remain responsive.
     diagrams.forEach(d => _renderSingleThumbnail(d));
-
-    // Log the end of the list rendering process
-    tracer.logStep('UI: Finished rendering diagram list placeholders');
 }
 
-function _updateActiveDiagramSelection({ currentDiagramId }) {
+function _updateActiveDiagramSelection({ activeDiagramId }) {
     if (!elements['diagram-list']) return;
 
     // Remove 'active' class from the previously active item
@@ -165,11 +184,10 @@ function _updateActiveDiagramSelection({ currentDiagramId }) {
     }
 
     // Add 'active' class to the new item
-    const newActiveItem = elements['diagram-list'].querySelector(`li[data-diagram-id="${currentDiagramId}"]`);
+    const newActiveItem = elements['diagram-list'].querySelector(`li[data-diagram-id="${activeDiagramId}"]`);
     if (newActiveItem) {
         newActiveItem.classList.add('active');
     }
-    tracer.logStep('UI: Updated active diagram selection');
 }
 
 function _renderEditor({ content }) {
@@ -179,19 +197,80 @@ function _renderEditor({ content }) {
     }
 }
 
-function _renderFileInfo({ projectName, diagramName }) {
+function _renderFileInfo({ project, diagram }) {
     if (!elements['file-info']) return;
-    elements['file-info'].textContent = `${projectName || 'No Project'} / ${diagramName || 'Unsaved Diagram'}`;
+    state.activeDiagram = diagram; // Store the active diagram in UI state
+    const projectName = project ? project.name : 'No Project';
+    const diagramName = diagram ? diagram.title : 'Unsaved Diagram';
+    elements['file-info'].textContent = `${projectName} / ${diagramName}`;
 }
 
-function _updateButtonStates({ currentDiagram }) {
-    const diagramExists = !!currentDiagram;
-    const isSaved = diagramExists && currentDiagram.id !== null;
-
-    if (elements['save-btn']) elements['save-btn'].disabled = !diagramExists;
+function _updateButtonStates({ diagram }) {
+    const isSaved = !!(diagram && diagram.id);
+    if (elements['save-btn']) elements['save-btn'].disabled = !diagram;
     if (elements['delete-btn']) elements['delete-btn'].disabled = !isSaved;
     if (elements['rename-btn']) elements['rename-btn'].disabled = !isSaved;
     if (elements['export-mmd-btn']) elements['export-mmd-btn'].disabled = !isSaved;
+}
+
+/**
+ * Displays a toast notification.
+ * @param {{message: string, type?: 'info'|'success'|'error', duration?: number}} options
+ */
+function _showNotification({ message, type = 'info', duration = 5000 }) {
+    const container = elements['toast-container'];
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+
+    // Set timeout to hide and then remove the toast
+    setTimeout(() => {
+        toast.classList.remove('show');
+        // Remove the element after the fade-out animation completes
+        toast.addEventListener('transitionend', () => {
+            toast.remove();
+        });
+    }, duration);
+}
+
+function _updateSyncStatus({ status, message }) {
+    const statusEl = elements['sync-status'];
+    const iconEl = elements['sync-status-icon'];
+    const textEl = elements['sync-status-text'];
+
+    if (!statusEl || !iconEl || !textEl) return;
+
+    // Clear previous status classes
+    statusEl.classList.remove('syncing', 'error', 'success');
+    textEl.textContent = message || '';
+
+    switch (status) {
+        case 'syncing':
+            statusEl.classList.add('syncing');
+            iconEl.textContent = '🔄';
+            break;
+        case 'success':
+            statusEl.classList.add('success');
+            iconEl.textContent = '✅';
+            break;
+        case 'error':
+            statusEl.classList.add('error');
+            iconEl.textContent = '❌';
+            break;
+        case 'idle':
+        default:
+            iconEl.textContent = '';
+            break;
+    }
 }
 
 function _downloadFile({ filename, content, mimeType }) {
@@ -221,35 +300,82 @@ function _hideNewDiagramModal() {
     }
 }
 
+function _showConnectProjectModal() {
+    if (elements['connect-project-modal']) {
+        elements['connect-project-modal'].style.display = 'flex';
+        // Reset form fields
+        ['connect-repo-path', 'connect-token', 'connect-password', 'connect-password-confirm'].forEach(id => elements[id].value = '');
+        elements['connect-submit-btn'].disabled = true;
+    }
+}
+
+function _hideConnectProjectModal() {
+    if (elements['connect-project-modal']) {
+        elements['connect-project-modal'].style.display = 'none';
+    }
+}
+
+function _showUnlockSessionModal({ projectName }) {
+    if (elements['unlock-session-modal']) {
+        elements['unlock-project-name'].textContent = projectName;
+        elements['unlock-password'].value = '';
+        elements['unlock-error'].style.display = 'none';
+        elements['unlock-session-modal'].style.display = 'flex';
+        elements['unlock-password'].focus();
+    }
+}
+
+function _hideUnlockSessionModal() {
+    if (elements['unlock-session-modal']) {
+        elements['unlock-session-modal'].style.display = 'none';
+    }
+}
+
 function _attachEventListeners() {
-    elements['project-selector']?.addEventListener('change', (e) => bus.notify('ui:projectSelected', { projectId: e.target.value }));
+    elements['project-selector']?.addEventListener('change', (e) => notify('ui:projectSelected', { projectId: parseInt(e.target.value, 10) }));
     elements['new-project-btn']?.addEventListener('click', () => {
-        const name = prompt('Enter new project name:');
-        if (name) bus.notify('ui:newProjectClicked', { name });
+        console.log('[UI] "New Project" button clicked. Showing connect modal.');
+        _showConnectProjectModal();
     });
-    elements['delete-project-btn']?.addEventListener('click', () => bus.notify('ui:deleteProjectClicked'));
+    elements['delete-project-btn']?.addEventListener('click', () => {
+        console.log('[UI] "Delete Project" button clicked.');
+        notify('ui:deleteProjectClicked');
+    });
 
     elements['diagram-list']?.addEventListener('click', (e) => {
         const listItem = e.target.closest('li[data-diagram-id]');
         if (listItem) {
-            tracer.startTrace('Select Diagram');
             const diagramId = parseInt(listItem.dataset.diagramId, 10);
-            bus.notify('ui:diagramSelected', { diagramId });
+            notify('ui:diagramSelected', { diagramId });
         }
     });
 
     // --- NEW "NEW" BUTTON FLOW ---
     // When the user clicks "New", immediately show the modal to get a name.
-    elements['new-btn']?.addEventListener('click', () => _showNewDiagramModal());
-
-    elements['save-btn']?.addEventListener('click', () => bus.notify('ui:saveDiagramClicked'));
-    elements['delete-btn']?.addEventListener('click', () => bus.notify('ui:deleteDiagramClicked'));
-    elements['rename-btn']?.addEventListener('click', () => bus.notify('ui:renameDiagramClicked'));
-    elements['export-mmd-btn']?.addEventListener('click', () => bus.notify('ui:exportMmdClicked'));
-
-    elements['download-project-btn']?.addEventListener('click', () => bus.notify('ui:downloadProjectClicked'));
-
-    elements['code-editor']?.addEventListener('input', (e) => bus.notify('ui:editorContentChanged', { content: e.target.value }));
+    elements['new-btn']?.addEventListener('click', () => {
+        console.log('[UI] "New Diagram" button clicked.');
+        _showNewDiagramModal();
+    });
+    elements['save-btn']?.addEventListener('click', () => {
+        console.log('[UI] "Save Diagram" button clicked.');
+        notify('ui:saveDiagramClicked');
+    });
+    elements['delete-btn']?.addEventListener('click', () => {
+        console.log('[UI] "Delete Diagram" button clicked.');
+        notify('ui:deleteDiagramClicked');
+    });
+    elements['rename-btn']?.addEventListener('click', () => {
+        const diagram = state.activeDiagram; // Use internal UI state
+        if (diagram) {
+            const newTitle = prompt('Enter new diagram name:', diagram.title);
+            if (newTitle && newTitle.trim() !== '' && newTitle !== diagram.title) {
+                notify('ui:renameDiagramClicked', { diagramId: diagram.id, newTitle: newTitle.trim() });
+            }
+        }
+    });
+    elements['export-mmd-btn']?.addEventListener('click', () => notify('ui:exportMmdClicked'));
+    elements['download-project-btn']?.addEventListener('click', () => notify('ui:downloadProjectClicked'));
+    elements['code-editor']?.addEventListener('input', (e) => notify('ui:editorContentChanged', { content: e.target.value }));
 
     // Add validation to the new diagram modal input
     elements['new-name']?.addEventListener('input', (e) => {
@@ -258,14 +384,60 @@ function _attachEventListeners() {
 
     elements['new-create-btn']?.addEventListener('click', () => {
         const name = elements['new-name'].value.trim();
+        console.log(`[UI] "Create Diagram" in modal clicked. Name: "${name}"`);
         if (name) {
-            bus.notify('ui:createDiagramClicked', { name });
+            notify('ui:createDiagramClicked', { name });
             _hideNewDiagramModal();
         }
     });
     elements['new-cancel-btn']?.addEventListener('click', _hideNewDiagramModal);
+    elements['render-btn']?.addEventListener('click', () => notify('ui:renderDiagramRequested'));
 
-    elements['render-btn']?.addEventListener('click', () => bus.notify('ui:renderDiagramRequested'));
+    // --- Connect Project Modal Listeners ---
+    const connectInputs = ['connect-repo-path', 'connect-token', 'connect-password', 'connect-password-confirm'];
+    connectInputs.forEach(id => {
+        elements[id]?.addEventListener('input', () => {
+            const allFilled = connectInputs.every(i => elements[i].value.trim() !== '');
+            const passwordsMatch = elements['connect-password'].value === elements['connect-password-confirm'].value;
+            
+            elements['connect-password-error'].style.display = (elements['connect-password'].value && elements['connect-password-confirm'].value && !passwordsMatch) ? 'block' : 'none';
+            elements['connect-submit-btn'].disabled = !(allFilled && passwordsMatch);
+        });
+    });
+
+    elements['connect-cancel-btn']?.addEventListener('click', _hideConnectProjectModal);
+
+    elements['connect-submit-btn']?.addEventListener('click', () => {
+        console.log('[UI] "Encrypt & Connect" button clicked.');
+        const payload = {
+            gitProvider: elements['connect-provider'].value,
+            repositoryPath: elements['connect-repo-path'].value.trim(),
+            token: elements['connect-token'].value.trim(),
+            password: elements['connect-password'].value,
+        };
+
+        // Basic validation check before notifying
+        if (payload.repositoryPath && payload.token && payload.password) {
+            notify('ui:connectProjectClicked', payload);
+            _hideConnectProjectModal();
+        } else {
+            alert('Please fill out all fields.');
+        }
+    });
+
+    // --- Unlock Session Modal Listeners ---
+    elements['unlock-cancel-btn']?.addEventListener('click', _hideUnlockSessionModal);
+    elements['unlock-submit-btn']?.addEventListener('click', () => {
+        const password = elements['unlock-password'].value;
+        if (password) {
+            notify('ui:unlockSessionClicked', { password });
+        }
+    });
+    elements['unlock-password']?.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') elements['unlock-submit-btn'].click();
+    });
+
+
 
     // Tabs
     elements['code-tab']?.addEventListener('click', () => _switchTab('code'));
@@ -288,7 +460,7 @@ function _switchTab(tabName) {
     }
 
     if (tabName === 'diagram' || isSplit) {
-        bus.notify('ui:renderDiagramRequested');
+        notify('ui:renderDiagramRequested');
     }
 }
 
@@ -307,7 +479,7 @@ function _toggleSplitView() {
         // Reset widths to allow resizing
         elements['code-view'].style.width = '50%';
         elements['diagram-view'].style.width = '50%';
-        bus.notify('ui:renderDiagramRequested');
+        notify('ui:renderDiagramRequested');
 
     } else {
         state.activeView = state.activeTab;
@@ -343,21 +515,6 @@ function _reset() {
     elements = {};
 }
 
-const actions = {
-    'initialize': _initialize,
-    'renderMermaidDiagram': _renderMermaidDiagram,
-    'renderProjectSelector': _renderProjectSelector,
-    'renderDiagramList': _renderDiagramList,
-    'updateActiveDiagramSelection': _updateActiveDiagramSelection,
-    'renderEditor': _renderEditor,
-    'renderFileInfo': _renderFileInfo,
-    'updateButtonStates': _updateButtonStates,
-    'downloadFile': _downloadFile,
-    'showNewDiagramModal': _showNewDiagramModal,
-    'switchTab': _switchTab,
-    'toggleSplitView': _toggleSplitView,
-};
-
 /**
  * Injects a mermaid library instance, primarily for testing purposes.
  * @param {object} mockMermaid - The mock mermaid object.
@@ -367,14 +524,29 @@ function _setMermaid(mockMermaid) {
 }
 
 export const uiConcept = {
-    subscribe: bus.subscribe,
-    notify: bus.notify,
+    subscribe(fn) { subscribers.add(fn); },
+    notify,
     getState: () => ({ ...state }),
     reset: _reset,
-    listen(event, payload) {
-        if (actions[event]) {
-            actions[event](payload);
-        }
-    },
     setMermaid: _setMermaid,
+    actions: {
+        initialize: _initialize,
+        renderMermaidDiagram: _renderMermaidDiagram,
+        renderProjectSelector: _renderProjectSelector,
+        renderDiagramList: _renderDiagramList,
+        updateActiveDiagramSelection: _updateActiveDiagramSelection,
+        renderEditor: _renderEditor,
+        renderFileInfo: _renderFileInfo,
+        updateButtonStates: _updateButtonStates,
+        downloadFile: _downloadFile,
+        showNotification: _showNotification,
+        updateSyncStatus: _updateSyncStatus,
+        showNewDiagramModal: _showNewDiagramModal,
+        showConnectProjectModal: _showConnectProjectModal,
+        hideConnectProjectModal: _hideConnectProjectModal,
+        showUnlockSessionModal: _showUnlockSessionModal,
+        hideUnlockSessionModal: _hideUnlockSessionModal,
+        switchTab: _switchTab,
+        toggleSplitView: _toggleSplitView,
+    }
 };

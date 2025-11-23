@@ -40,7 +40,14 @@ async function runTest(file) {
 }
 
 async function main() {
-  const testFiles = await findTestFiles(testsDir);
+  const args = process.argv.slice(2);
+  let testFiles = [];
+
+  if (args.length > 0) {
+    testFiles = args.map(arg => join(__dirname, arg));
+  } else {
+    testFiles = await findTestFiles(testsDir);
+  }
   const results = await Promise.all(testFiles.map(runTest));
 
   console.log('\n--- Test Summary ---');

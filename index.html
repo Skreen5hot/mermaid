@@ -75,7 +75,13 @@
     </div>
 </main>
 
-<footer>Version 1.0</footer>
+<footer>
+    <div id="sync-status">
+        <span id="sync-status-icon"></span>
+        <span id="sync-status-text"></span>
+    </div>
+    Version 1.0
+</footer>
 
 <!-- New Diagram Modal -->
 <div id="new-modal" class="modal">
@@ -90,27 +96,67 @@
     </div>
 </div>
 
+<!-- Connect Project Modal -->
+<div id="connect-project-modal" class="modal">
+    <div class="modal-content">
+        <h2>Connect New Project</h2>
+        
+        <label for="connect-provider">Git Provider</label>
+        <select id="connect-provider">
+            <option value="github" selected>GitHub</option>
+            <option value="gitlab">GitLab</option>
+        </select>
+
+        <label for="connect-repo-path">Repository Path (e.g., owner/repo)</label>
+        <input type="text" id="connect-repo-path" placeholder="your-username/your-repo-name" required>
+
+        <label for="connect-token">Personal Access Token</label>
+        <input type="password" id="connect-token" placeholder="ghp_... or glpat_..." required>
+
+        <h3>Create a Master Password</h3>
+        <p>This password encrypts your token in the browser. It is never stored or sent anywhere.</p>
+
+        <label for="connect-password">Master Password</label>
+        <input type="password" id="connect-password" required>
+
+        <label for="connect-password-confirm">Confirm Master Password</label>
+        <input type="password" id="connect-password-confirm" required>
+        <div id="connect-password-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Passwords do not match.</div>
+
+        <div class="modal-buttons">
+            <button id="connect-cancel-btn">Cancel</button>
+            <button id="connect-submit-btn">Encrypt & Connect</button>
+        </div>
+    </div>
+</div>
+
+<!-- Unlock Session Modal -->
+<div id="unlock-session-modal" class="modal">
+    <div class="modal-content">
+        <h2>Unlock Project</h2>
+        <p>Enter the master password for <strong id="unlock-project-name"></strong> to start syncing.</p>
+        
+        <label for="unlock-password">Master Password</label>
+        <input type="password" id="unlock-password" required>
+        <div id="unlock-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Incorrect password. Please try again.</div>
+
+        <div class="modal-buttons">
+            <button id="unlock-cancel-btn">Cancel</button>
+            <button id="unlock-submit-btn">Unlock</button>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<!-- <script src="app.js" type="module" defer></script> -->
 <script type="module">
+    // This single import initializes the entire application by running the setup
+    // code within the synchronizations module.
+    console.log('[index.html] Script module loaded. Initializing application...');
     import { initializeApp } from './src/synchronizations.js';
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeApp();
-    });
-</script>
-<script type="module">
-    // This script connects DOM events to the application's event system.
-    import { uiConcept } from './src/concepts/uiConcept.js';
 
-    const uploadInput = document.getElementById('upload-diagrams-input');
-    if (uploadInput) {
-        uploadInput.addEventListener('change', (event) => {
-            const files = event.target.files;
-            // Publish an event to the UI concept, which will be handled in synchronizations.js
-            uiConcept.notify('ui:uploadMmdClicked', { files });
-        });
-    }
+    initializeApp();
+    console.log('[index.html] initializeApp() has been called.');
 </script>
 
 </body>

@@ -59,10 +59,10 @@ The **Synchronization Core Agent (C)** acts as the hub, coordinating:
 
 | Task | Module | Status | Priority |
 | :--- | :--- | :--- | :--- |
-| 1.1 Finalize Data Model Schema | D | ◻ | High |
-| 1.2 Implement **Token Encryption/Decryption** (Reuse GitConnect Crypto) | A | ◻ | High |
-| 1.3 **IndexedDB Store** Setup (`projects`, `diagrams`, `syncQueue`) | D | ◻ | High |
-| 1.4 **Git Abstraction Layer (GAL)** Interface Definition | B | ◻ | High |
+| 1.1 Finalize Data Model Schema | D | X | High |
+| 1.2 Implement **Token Encryption/Decryption** (Reuse GitConnect Crypto) | A | X | High |
+| 1.3 **IndexedDB Store** Setup (`projects`, `diagrams`, `syncQueue`) | D | X | High |
+| 1.4 **Git Abstraction Layer (GAL)** Interface Definition | B | X | High |
 | 1.5 Scaffold GitHub Adapter (`github.js`) for `contents` endpoint (List/Get/Put) | B | ◻ | High |
 
 # Phase 2: Iterative Module / Cluster Development

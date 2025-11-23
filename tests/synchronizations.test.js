@@ -1,14 +1,14 @@
-import { describe, it } from './test-helpers.js';
-import assert from '../src/assert.js';
+import { describe, it, assert, beforeEach } from './test-utils.js';
 
 // Import all concepts to be tested
 import { storageConcept } from '../src/concepts/storageConcept.js';
 import { projectConcept } from '../src/concepts/projectConcept.js';
 import { diagramConcept } from '../src/concepts/diagramConcept.js';
 import { uiConcept } from '../src/concepts/uiConcept.js';
+import { securityConcept } from '../src/concepts/securityConcept.js';
 
 // Import the wiring
-import { initializeApp } from '../src/synchronizations.js';
+import { initializeApp, synchronizations } from '../src/synchronizations.js';
 
 // --- Mocks (combined from other test files) ---
 
@@ -115,29 +115,40 @@ function setupAllMocks() {
     uiConcept.setMermaid({ parse: () => Promise.resolve(), render: () => Promise.resolve({ svg: '' }) });
 }
 
-function beforeEach() {
+beforeEach(() => {
     // Reset all concepts to a clean state
-    storageConcept.reset();
-    projectConcept.reset();
-    diagramConcept.reset();
-    uiConcept.reset();
+    const allConcepts = [storageConcept, projectConcept, diagramConcept, uiConcept, securityConcept];
+    allConcepts.forEach(c => {
+      if (c.state) {
+        Object.keys(c.state).forEach(key => {
+          c.state[key] = Array.isArray(c.state[key]) ? [] : null;
+        });
+      }
+      const subscribers = c.subscribe(() => {});
+      if (subscribers) subscribers.clear();
+    });
 
     // Set up fresh mocks for the test
     setupAllMocks();
 
     // Initialize the app to connect all the concepts via synchronizations.js
-    initializeApp();
-}
+    synchronizations.forEach((sync) => {
+        sync.from.subscribe((event, payload) => {
+          if (event === sync.when) {
+            sync.do(payload);
+          }
+        });
+      });
+});
 
 describe('Synchronizations (Integration Tests)', () => {
 
     it('Storage -> Project -> UI: Initial app load should fetch projects and render the UI', async () => {
-        beforeEach();
         // Arrange: Define what the mock database will return
         mockDbStore.projects = [{ id: 1, name: 'My First Project' }];
 
-        // Act: The initializeApp() in beforeEach already started the process.
-        // We just need to flush the async requests for opening the DB and getting projects.
+        // Act: Trigger the initial load and flush async requests
+        projectConcept.actions.loadProjects();
         flushMockRequests(); // Flushes DB open
         flushMockRequests(); // Flushes getAll projects
 
@@ -151,47 +162,57 @@ describe('Synchronizations (Integration Tests)', () => {
     });
 
     it('UI -> Project -> Storage: Creating a new project', async () => {
-        beforeEach();
-        flushMockRequests(); // Flush DB open
-        flushMockRequests(); // Flush initial DB open and project load
+        // Arrange: Simulate a UI event for creating a new project
+        const projectDetails = { gitProvider: 'github', repositoryPath: 'test/repo', token: 't', password: 'p' };
 
-        // Act: Simulate the UI event for creating a new project
-        uiConcept.notify('ui:newProjectClicked', { name: 'New Test Project' });
+        // Act
+        uiConcept.notify('ui:connectProjectClicked', projectDetails);
         flushMockRequests(); // Flush the 'add' request for the new project
         flushMockRequests(); // Flush the subsequent 'getAll' projects request
 
-        // Assert: Check if the project was added to our mock database
-        // The app creates a 'Default Project' on first load, so we expect 2 projects total.
-        assert.strictEqual(mockDbStore.projects.length, 2, 'There should be two projects in the mock DB (Default + New)');
-        assert.strictEqual(mockDbStore.projects[0].name, 'Default Project', 'The first project should be the default');
-        assert.strictEqual(mockDbStore.projects[1].name, 'New Test Project', 'The second project should be our new one');
+        // Assert
+        assert.strictEqual(mockDbStore.projects.length, 1, 'There should be one project in the mock DB');
+        assert.strictEqual(mockDbStore.projects[0].name, 'test/repo', 'The new project should be in the mock DB');
+    });
+
+    it('Storage -> Project -> Diagram: Initial load with empty DB should create a default project and diagram', async () => {
+        // Arrange: Ensure the mock database is empty
+        mockDbStore.projects = [];
+        mockDbStore.diagrams = [];
+
+        // Act: Trigger the initial load
+        projectConcept.actions.loadProjects();
+        flushMockRequests(); // DB open
+        flushMockRequests(); // getAll projects (returns empty)
+        flushMockRequests(); // addProject for "Default Project"
+        flushMockRequests(); // getAll projects (reloaded)
+        flushMockRequests(); // addDiagram for "example.mmd"
+        flushMockRequests(); // addSyncQueueItem for the new diagram
+
+        // Assert
+        assert.strictEqual(mockDbStore.projects.length, 1, 'A default project should be created');
+        assert.strictEqual(mockDbStore.projects[0].name, 'Default Project', 'The project should be named "Default Project"');
+        assert.strictEqual(mockDbStore.diagrams.length, 1, 'A default diagram should be created');
+        assert.strictEqual(mockDbStore.diagrams[0].title, 'example.mmd', 'The diagram should be named "example.mmd"');
     });
 
     it('UI -> Diagram -> UI: Creating a new diagram should auto-select it and populate the editor', async () => {
-        beforeEach();
-        // Flush initial load
-        flushMockRequests(); // DB open
-        flushMockRequests(); // Project list
-        flushMockRequests(); // Default diagram save
-        flushMockRequests(); // Diagram list
+        // Arrange: Set an active project
+        projectConcept.state.activeProjectId = 1;
 
-        // Arrange: Simulate user clicking the "New Diagram" button and filling out the modal
+        // Act: Simulate user clicking the "New Diagram" button and flush async requests
         uiConcept.notify('ui:createDiagramClicked', { name: 'My Auto-Selected Diagram' });
-
-        // Act: Flush the async requests
         flushMockRequests(); // DB put for the new diagram
         flushMockRequests(); // DB getAll for the diagram list reload
 
         // Assert
         const diagramState = diagramConcept.getState();
-        assert.ok(diagramState.currentDiagram, 'A current diagram should be set');
-        assert.strictEqual(diagramState.currentDiagram.name, 'My Auto-Selected Diagram', 'The correct diagram should be selected');
+        assert.ok(diagramState.activeDiagram, 'An active diagram should be set');
+        assert.strictEqual(diagramState.activeDiagram.title, 'My Auto-Selected Diagram', 'The correct diagram should be selected');
 
         const editor = mockElements['code-editor'];
-        assert.strictEqual(editor.value, diagramState.currentDiagram.content, 'Editor should be populated with the new diagram content');
+        assert.strictEqual(editor.value, diagramState.activeDiagram.content, 'Editor should be populated with the new diagram content');
         
-        // Note: The focus assertion is tricky in this mock setup, but we can check our mock property.
-        // In a real browser test, you would check document.activeElement.
         assert.ok(editor._isFocused, 'Editor should be focused after the new diagram is loaded');
     });
 });

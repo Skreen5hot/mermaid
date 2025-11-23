@@ -1,90 +1,99 @@
-import { createEventBus } from '../utils/eventBus.js';
+/**
+ * @module projectConcept
+ * @description Manages the state of projects, including the list of all projects
+ * and the currently active project. It emits events for creation, deletion,
+ * and selection, but does not perform storage or API calls itself.
+ * It follows the "Concepts and Synchronizations" architecture.
+ */
 
-const bus = createEventBus();
+const subscribers = new Set();
 
-const initialState = {
-    projects: [],
-    currentProjectId: null,
-};
-
-let state = { ...initialState };
-
-function _loadProjects() {
-    projectConcept.notify('do:listProjects');
+/**
+ * Notifies all subscribed listeners of an event.
+ * @param {string} event - The name of the event.
+ * @param {*} payload - The data associated with the event.
+ */
+function notify(event, payload) {
+  for (const subscriber of subscribers) {
+    subscriber(event, payload);
+  }
 }
-
-function _setProjects(projects = []) {
-    state.projects = projects;
-    const previousProjectId = state.currentProjectId;
-
-    if (projects.length === 0) {
-        projectConcept.notify('do:createProject', { name: 'Default Project', isDefault: true });
-        state.currentProjectId = null;
-    } else if (!state.projects.find(p => p.id === state.currentProjectId)) {
-        state.currentProjectId = projects.length > 0 ? projects[0].id : null;
-    }
-    // If the project ID changed (e.g., on initial load), fire the 'projectChanged' event.
-    if (state.currentProjectId !== previousProjectId && state.currentProjectId !== null) {
-        projectConcept.notify('projectChanged', { projectId: state.currentProjectId });
-    }
-    projectConcept.notify('projectsUpdated', { projects: state.projects, currentProjectId: state.currentProjectId });
-}
-
-function _createProject({ name }) {
-    projectConcept.notify('do:createProject', { name });
-}
-
-function _renameProject({ projectId, newName }) {
-    // The storage concept doesn't have a rename, so we'll just save it with the same ID.
-    projectConcept.notify('do:saveProject', { projectData: { id: projectId, name: newName } });
-}
-
-function _deleteProject({ projectId }) {
-    projectConcept.notify('do:deleteProject', { projectId });
-}
-
-function _setCurrentProject({ projectId }) {
-    const newProjectId = parseInt(projectId, 10);
-    if (state.currentProjectId !== newProjectId) {
-        state.currentProjectId = newProjectId;
-        projectConcept.notify('projectChanged', { projectId: newProjectId });
-    }
-}
-
-function _handleProjectCreated(project) {
-    // This is called after storage confirms creation
-    _loadProjects(); // Easiest way to get the full, fresh list
-    _setCurrentProject({ projectId: project.id });
-}
-
-function _reset() {
-    state = { ...initialState };
-}
-
-const actions = {
-    'loadProjects': _loadProjects,
-    'setProjects': _setProjects,
-    'createProject': _createProject,
-    'deleteProject': _deleteProject,
-    'renameProject': _renameProject,
-    'setCurrentProject': _setCurrentProject,
-    'handleProjectCreated': _handleProjectCreated,
-    'reset': _reset,
-};
 
 export const projectConcept = {
-    subscribe: bus.subscribe,
-    // Expose a way to get current state without allowing mutation
-    getState: () => ({ ...state }),
-    notify: bus.notify,
-    reset: _reset,
-    listen(event, payload) {
-        if (actions[event]) {
-            console.log(`[ProjectConcept] Action received: ${event}`, payload);
-            actions[event](payload);
-        } else {
-            // Allow direct notification for external events to trigger internal actions
-            bus.notify(event, payload);
-        }
+  state: {
+    /** @type {Array<any>} */
+    projects: [],
+    /** @type {number | null} */
+    activeProjectId: null,
+  },
+
+  actions: {
+    /**
+     * Sets the list of projects in the state, typically after being loaded from storage.
+     * @param {Array<any>} projects - The array of project objects.
+     */
+    setProjects(projects) {
+      projectConcept.state.projects = projects || [];
+      notify('projectsLoaded', projectConcept.state.projects);
+    },
+
+    /**
+     * Initiates the process of creating a new project.
+     * Emits an event with the necessary details for other concepts to handle.
+     * @param {{gitProvider: string, repositoryPath: string, token: string, password: string}} details - The new project details.
+     */
+    createProject(details) {
+      // Does not modify state directly. Emits an event for the synchronization layer.
+      notify('projectCreationRequested', details);
+    },
+
+    /**
+     * Sets the currently active project.
+     * @param {number} projectId - The ID of the project to set as active.
+     */
+    setActiveProject(projectId) {
+      if (projectConcept.state.activeProjectId !== projectId) {
+        projectConcept.state.activeProjectId = projectId;
+        const project = projectConcept.state.projects.find(p => p.id === projectId);
+        console.log(`[ProjectConcept] Active project set to:`, project);
+        notify('projectSelected', project);
+      }
+    },
+
+    /**
+     * Initiates the deletion of a project.
+     * Emits an event for the synchronization layer to handle storage operations.
+     * @param {number} projectId - The ID of the project to delete.
+     */
+    deleteProject(projectId) {
+      notify('projectDeletionRequested', { projectId });
+    },
+
+    /**
+     * Initiates the loading of all projects from storage.
+     */
+    loadProjects() {
+      notify('projectsLoadRequested');
+    },
+
+    /**
+     * Updates a single project in the state after it has been created or updated.
+     * @param {any} newProject - The new or updated project object.
+     */
+    addOrUpdateProject(newProject) {
+      const index = projectConcept.state.projects.findIndex(p => p.id === newProject.id);
+      if (index > -1) {
+        projectConcept.state.projects[index] = newProject;
+      } else {
+        projectConcept.state.projects.push(newProject);
+      }
+      notify('projectListUpdated', projectConcept.state.projects);
     }
+  },
+
+  subscribe(fn) {
+    subscribers.add(fn);
+  },
+
+  notify,
 };

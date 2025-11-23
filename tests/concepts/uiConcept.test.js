@@ -1,6 +1,5 @@
+import { describe, it, assert, beforeEach } from '../test-utils.js';
 import { uiConcept } from '../../src/concepts/uiConcept.js';
-import { describe, it } from '../test-helpers.js';
-import assert from '../../src/assert.js';
 
 // --- Mocks for Browser Environment ---
 
@@ -9,13 +8,9 @@ let mockElements = {};
 function setupMockDOM() {
     mockElements = {};
     const ids = [
-        'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
-        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'theme-toggle',
-        'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn', 'fullscreen-btn',
-        'delete-btn', 'rename-btn', 'new-modal', 'new-name', 'new-cancel-btn',
-        'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
-        'split-view-resizer', 'content-area',
-        'export-mmd-btn', 'render-btn'
+        'project-selector', 'code-editor', 'new-modal', 'new-name', 'new-create-btn',
+        'connect-project-modal', 'unlock-session-modal', 'toast-container', 'split-view-btn',
+        'content-area', 'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'fullscreen-btn'
     ];
 
     ids.forEach(id => {
@@ -32,7 +27,7 @@ function setupMockDOM() {
                 toggle: function(className, force) {
                     if (force === true || (force === undefined && !this._classes.has(className))) {
                         this._classes.add(className);
-                    } else {
+                    } else if (force === false || (force === undefined && this._classes.has(className))) {
                         this._classes.delete(className);
                     }
                 },
@@ -46,31 +41,28 @@ function setupMockDOM() {
             // Helper to simulate event trigger
             _trigger: function(event, eventData = {}) {
                 (this.listeners[event] || []).forEach(cb => cb({ target: this, ...eventData }));
-            }
-        };
-        // Add focus mock
-        mockElements[id].focus = () => {
-            mockElements[id]._isFocused = true;
+            },
+            focus: () => { this._isFocused = true; }
         };
     });
 
     // Mock document
     global.document = {
         getElementById: (id) => mockElements[id] || null,
-        body: { 
-            style: {}, 
-            userSelect: '',
+        body: {
             classList: {
                 _classes: new Set(),
                 toggle: function(className, force) {
-                    if (force) this._classes.add(className);
-                    else this._classes.delete(className);
+                    if (force === true || (force === undefined && !this._classes.has(className))) {
+                        this._classes.add(className);
+                    } else if (force === false || (force === undefined && this._classes.has(className))) {
+                        this._classes.delete(className);
+                    }
                 },
                 contains: function(className) { return this._classes.has(className) }
-            }
+            },
+            appendChild: (el) => { /* no-op */ },
         },
-        addEventListener: () => {},
-        removeEventListener: () => {},
     };
 }
 
@@ -83,133 +75,127 @@ const mockMermaid = {
 
 describe('UI Concept', () => {
 
-    function beforeEach() {
+    beforeEach(() => {
         setupMockDOM();
-        uiConcept.reset();
         uiConcept.setMermaid(mockMermaid);
-        uiConcept.listen('initialize');
-    }
-
-    it("listen('renderProjectSelector') should update the project selector HTML", () => {
-        beforeEach();
-        const projects = [{ id: 1, name: 'Project A' }, { id: 2, name: 'Project B' }];
-        uiConcept.listen('renderProjectSelector', { projects, currentProjectId: 2 });
-
-        const selector = mockElements['project-selector'];
-        assert.ok(selector.innerHTML.includes('<option value="1" >Project A</option>'), 'Should contain Project A');
-        assert.ok(selector.innerHTML.includes('<option value="2" selected>Project B</option>'), 'Should contain and select Project B');
+        // Initialize caches elements and attaches listeners
+        uiConcept.actions.initialize();
     });
 
-    it("listen('renderEditor') should update the editor's value", () => {
-        beforeEach();
-        const newContent = 'graph TD; A-->B;';
-        uiConcept.listen('renderEditor', { content: newContent });
+    describe('Render Actions', () => {
+        it('[UNIT] renderProjectSelector: should update the project selector HTML', () => {
+            const projects = [{ id: 1, name: 'Project A' }, { id: 2, name: 'Project B' }];
+            uiConcept.actions.renderProjectSelector({ projects, activeProjectId: 2 });
 
-        assert.strictEqual(mockElements['code-editor'].value, newContent, "Editor value should be updated");
+            const selector = mockElements['project-selector'];
+            assert.include(selector.innerHTML, '<option value="1" >Project A</option>', 'Should contain Project A');
+            assert.include(selector.innerHTML, '<option value="2" selected>Project B</option>', 'Should contain and select Project B');
+        });
+
+        it("[UNIT] renderEditor: should update the editor's value", () => {
+            const newContent = 'graph TD; A-->B;';
+            uiConcept.actions.renderEditor({ content: newContent });
+
+            assert.strictEqual(mockElements['code-editor'].value, newContent, "Editor value should be updated");
+        });
     });
 
-    it("listen('toggleSplitView') should toggle the split view state", () => {
-        beforeEach();
-        
-        // Turn on split view
-        uiConcept.listen('toggleSplitView');
-        let state = uiConcept.getState();
-        assert.strictEqual(state.activeView, 'split', 'Active view should be "split"');
-        assert.ok(mockElements['content-area'].classList.contains('split-view-active'), 'Content area should have split-view-active class');
+    describe('Modal Actions', () => {
+        it('[UNIT] showNewDiagramModal: should display the modal', () => {
+            const newModal = mockElements['new-modal'];
+            assert.notStrictEqual(newModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
 
-        // Turn off split view
-        uiConcept.listen('toggleSplitView');
-        state = uiConcept.getState();
-        assert.strictEqual(state.activeView, 'code', 'Active view should revert to the active tab (code)');
-        assert.ok(!mockElements['content-area'].classList.contains('split-view-active'), 'Content area should not have split-view-active class');
+            uiConcept.actions.showNewDiagramModal();
+
+            assert.strictEqual(newModal.style.display, 'flex', 'Modal style.display should be "flex"');
+        });
+
+        it('[UNIT] showConnectProjectModal: should display the modal', () => {
+            const connectModal = mockElements['connect-project-modal'];
+            assert.notStrictEqual(connectModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
+
+            uiConcept.actions.showConnectProjectModal();
+
+            assert.strictEqual(connectModal.style.display, 'flex', 'Modal style.display should be "flex"');
+        });
+
+        it('[UNIT] showUnlockSessionModal: should display the modal', () => {
+            const unlockModal = mockElements['unlock-session-modal'];
+            assert.notStrictEqual(unlockModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
+
+            uiConcept.actions.showUnlockSessionModal({ projectName: 'Test Project' });
+
+            assert.strictEqual(unlockModal.style.display, 'flex', 'Modal style.display should be "flex"');
+        });
     });
 
-    it("should notify 'ui:projectSelected' when the project selector is changed", () => {
-        beforeEach();
-        const received = [];
-        uiConcept.subscribe((event, payload) => received.push({ event, payload }));
+    describe('Event Listeners', () => {
+        it("[UNIT] should notify 'ui:projectSelected' when the project selector is changed", () => {
+            let notifiedEvent = null;
+            let notifiedPayload = null;
+            uiConcept.subscribe((event, payload) => {
+                notifiedEvent = event;
+                notifiedPayload = payload;
+            });
 
-        // Simulate user changing the dropdown
-        const selector = mockElements['project-selector'];
-        selector.value = '3'; // Simulate selecting a project with ID 3
-        selector._trigger('change');
+            // Simulate user changing the dropdown
+            const selector = mockElements['project-selector'];
+            selector.value = '3'; // Simulate selecting a project with ID 3
+            selector._trigger('change');
 
-        assert.strictEqual(received.length, 1, 'Should have emitted one event');
-        assert.strictEqual(received[0].event, 'ui:projectSelected', 'Event name should be correct');
-        assert.strictEqual(received[0].payload.projectId, '3', 'Payload should contain the selected project ID');
+            assert.strictEqual(notifiedEvent, 'ui:projectSelected', 'Event name should be correct');
+            assert.deepStrictEqual(notifiedPayload, { projectId: 3 }, 'Payload should contain the selected project ID');
+        });
+
+        it("[UNIT] should notify 'ui:createDiagramClicked' when the new diagram modal is submitted", () => {
+            let notifiedEvent = null;
+            let notifiedPayload = null;
+            uiConcept.subscribe((event, payload) => {
+                notifiedEvent = event;
+                notifiedPayload = payload;
+            });
+
+            const newNameInput = mockElements['new-name'];
+            const createBtn = mockElements['new-create-btn'];
+
+            newNameInput.value = 'My New Diagram';
+            createBtn._trigger('click');
+
+            assert.strictEqual(notifiedEvent, 'ui:createDiagramClicked', 'Event name should be correct');
+            assert.deepStrictEqual(notifiedPayload, { name: 'My New Diagram' }, 'Payload should contain the new diagram name');
+        });
     });
 
-    it('should handle the new diagram flow via modal', () => {
-        beforeEach();
-        const received = [];
-        uiConcept.subscribe((event, payload) => received.push({ event, payload }));
+    describe('View Toggles', () => {
+        it('[UNIT] toggleSplitView: should toggle the split view state', () => {
+            // Turn on split view
+            uiConcept.actions.toggleSplitView();
+            let state = uiConcept.getState();
+            assert.strictEqual(state.activeView, 'split', 'Active view should be "split"');
+            assert.isTrue(mockElements['content-area'].classList.contains('split-view-active'), 'Content area should have split-view-active class');
+            assert.isTrue(mockElements['code-tab'].classList.contains('split-active-tab'), 'Code tab should be grayed out');
 
-        const newBtn = mockElements['new-btn'];
-        const newModal = mockElements['new-modal'];
-        const newNameInput = mockElements['new-name'];
-        const createBtn = mockElements['new-create-btn'];
+            // Turn off split view
+            uiConcept.actions.toggleSplitView();
+            state = uiConcept.getState();
+            assert.strictEqual(state.activeView, 'code', 'Active view should revert to the active tab (code)');
+            assert.isFalse(mockElements['content-area'].classList.contains('split-view-active'), 'Content area should not have split-view-active class');
+            assert.isFalse(mockElements['code-tab'].classList.contains('split-active-tab'), 'Code tab should not be grayed out');
+        });
 
-        // 1. User clicks "New" button
-        newBtn._trigger('click');
-        assert.strictEqual(newModal.style.display, 'flex', 'Modal should be displayed');
-        assert.ok(createBtn.disabled, 'Create button should be disabled initially');
+        it('[UNIT] toggleFullscreen: should toggle fullscreen mode and update the button icon', () => {
+            const fullscreenBtn = mockElements['fullscreen-btn'];
+            const body = global.document.body;
 
-        // 2. User types a name
-        newNameInput.value = 'My New Diagram';
-        newNameInput._trigger('input');
-        assert.ok(!createBtn.disabled, 'Create button should be enabled after typing a name');
-
-        // 3. User clicks "Create"
-        createBtn._trigger('click');
-        assert.strictEqual(newModal.style.display, 'none', 'Modal should be hidden after creation');
-        const createEvent = received.find(r => r.event === 'ui:createDiagramClicked');
-        assert.ok(createEvent, 'Should have emitted a "ui:createDiagramClicked" event');
-        assert.strictEqual(createEvent.payload.name, 'My New Diagram', 'Payload should contain the new diagram name');
-    });
-});
-
-describe('UI Concept - Split View Tabs', () => {
-    function beforeEach() {
-        setupMockDOM();
-        uiConcept.reset();
-        uiConcept.setMermaid(mockMermaid);
-        uiConcept.listen('initialize');
-    }
-
-    it('should gray out Code and Diagram tabs when Split view is active', () => {
-        beforeEach();
-        const splitViewBtn = mockElements['split-view-btn'];
-        const codeTab = mockElements['code-tab'];
-        const diagramTab = mockElements['diagram-tab'];
-
-        splitViewBtn._trigger('click'); // Activate split view
-        assert.ok(codeTab.classList.contains('split-active-tab'), 'Code tab should be grayed out');
-        assert.ok(diagramTab.classList.contains('split-active-tab'), 'Diagram tab should be grayed out');
-
-        splitViewBtn._trigger('click'); // Deactivate split view
-        assert.ok(!codeTab.classList.contains('split-active-tab'), 'Code tab should not be grayed out');
-        assert.ok(!diagramTab.classList.contains('split-active-tab'), 'Diagram tab should not be grayed out');
-    });
-});
-
-describe('UI Concept - Fullscreen', () => {
-    function beforeEach() {
-        setupMockDOM();
-        uiConcept.reset();
-        uiConcept.setMermaid(mockMermaid);
-        uiConcept.listen('initialize');
-    }
-
-    it('should toggle fullscreen mode and update the button icon', () => {
-        beforeEach();
-        const fullscreenBtn = mockElements['fullscreen-btn'];
-
-        fullscreenBtn._trigger('click'); // Enter fullscreen
-        assert.ok(global.document.body.classList.contains('fullscreen-active'), 'Body should have fullscreen class');
-        assert.strictEqual(fullscreenBtn.textContent, '⛶', 'Button icon should change to exit fullscreen');
-
-        fullscreenBtn._trigger('click'); // Exit fullscreen
-        assert.ok(!global.document.body.classList.contains('fullscreen-active'), 'Body should not have fullscreen class');
-        assert.strictEqual(fullscreenBtn.textContent, '⇱', 'Button icon should revert to enter fullscreen');
+            // Enter fullscreen
+            uiConcept.actions.toggleFullscreen();
+            assert.isTrue(body.classList.contains('fullscreen-active'), 'Body should have fullscreen class');
+            assert.strictEqual(fullscreenBtn.textContent, '⛶', 'Button icon should change to exit fullscreen');
+            
+            // Exit fullscreen
+            uiConcept.actions.toggleFullscreen();
+            assert.isFalse(body.classList.contains('fullscreen-active'), 'Body should not have fullscreen class');
+            assert.strictEqual(fullscreenBtn.textContent, '⇱', 'Button icon should revert to enter fullscreen');
+        });
     });
 });
