@@ -95,6 +95,13 @@ export const syncConcept = {
       try {
         const project = projectConcept.state.projects.find(p => p.id === projectConcept.state.activeProjectId);
         const token = securityConcept.state.decryptedToken;
+
+        // --- NEW: Guard against trying to sync local projects ---
+        if (project && project.gitProvider === 'local') {
+          console.log('[SyncConcept] Skipping sync for local project.');
+          return; // Exit early, nothing to sync.
+        }
+
         if (!project || !token) throw new Error('Sync failed: No active project or session is unlocked.');
 
         const [owner, repo] = project.repositoryPath.split('/');

@@ -39,6 +39,19 @@ function setupAllMocks() {
     mockRequests = [];
     mockElements = {};
 
+    // Mock JSZip for the download test
+    global.JSZip = class {
+        constructor() {
+            this.files = {};
+        }
+        file(name, content) {
+            this.files[name] = content;
+            return this; // for chaining
+        }
+        generateAsync() {
+            return Promise.resolve({ isMockBlob: true, content: this.files });
+        }
+    };
     // Mock IndexedDB
     const mockDb = {
         transaction: () => ({
@@ -214,5 +227,67 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.strictEqual(editor.value, diagramState.activeDiagram.content, 'Editor should be populated with the new diagram content');
         
         assert.ok(editor._isFocused, 'Editor should be focused after the new diagram is loaded');
+    });
+});
+
+describe('UI -> File I/O Synchronizations', () => {
+    let downloadFileSpy;
+
+    beforeEach(() => {
+        // Spy on the download action
+        downloadFileSpy = null;
+        uiConcept.actions.downloadFile = (payload) => {
+            downloadFileSpy = payload;
+        };
+    });
+
+    it('UI -> Storage: Uploading .mmd files should create new diagrams', async () => {
+        // Arrange
+        projectConcept.state.activeProjectId = 1;
+        mockDbStore.diagrams = [];
+        const uploadedFiles = [
+            { name: 'upload1.mmd', content: 'graph TD; A-->B;' },
+            { name: 'upload2.mmd', content: 'graph TD; C-->D;' }
+        ];
+
+        // Act
+        uiConcept.notify('ui:diagramsUploaded', { diagrams: uploadedFiles });
+        flushMockRequests(); // addDiagram for upload1
+        flushMockRequests(); // addSyncQueue for upload1
+        flushMockRequests(); // addDiagram for upload2
+        flushMockRequests(); // addSyncQueue for upload2
+
+        // Assert
+        assert.strictEqual(mockDbStore.diagrams.length, 2, 'Two new diagrams should be in the mock DB');
+        assert.strictEqual(mockDbStore.diagrams[0].title, 'upload1.mmd', 'First uploaded diagram should be saved');
+    });
+
+    it('UI -> Action: Export .mmd should trigger a download of the active diagram', async () => {
+        // Arrange
+        diagramConcept.state.activeDiagram = { id: 5, title: 'active_diagram.mmd', content: 'graph TD; E-->F;' };
+
+        // Act
+        uiConcept.notify('ui:exportMmdClicked');
+
+        // Assert
+        assert.isNotNull(downloadFileSpy, 'downloadFile action should have been called');
+        assert.strictEqual(downloadFileSpy.filename, 'active_diagram.mmd', 'Download filename should match active diagram title');
+        assert.strictEqual(downloadFileSpy.content, 'graph TD; E-->F;', 'Download content should match active diagram content');
+    });
+
+    it('UI -> Action: Download .zip should trigger a download with all project diagrams', async () => {
+        // Arrange
+        projectConcept.state.activeProjectId = 1;
+        projectConcept.state.projects = [{ id: 1, name: 'My Test Project' }];
+        mockDbStore.diagrams = [{ projectId: 1, title: 'file1.mmd', content: 'content1' }, { projectId: 1, title: 'file2.mmd', content: 'content2' }];
+
+        // Act
+        uiConcept.notify('ui:downloadProjectClicked');
+        flushMockRequests(); // getDiagramsByProjectId
+
+        // Assert
+        assert.isNotNull(downloadFileSpy, 'downloadFile action should have been called');
+        assert.strictEqual(downloadFileSpy.filename, 'my_test_project_project.zip', 'Download filename for the zip should be correct');
+        assert.isTrue(downloadFileSpy.content.isMockBlob, 'Download content should be a (mocked) zip blob');
     });
 });

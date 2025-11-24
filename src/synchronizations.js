@@ -68,13 +68,16 @@ export const synchronizations = [
         }
 
         console.log(`[Sync] Project ${project.id} selected. Loading its diagrams.`);
-        // If the session is not already unlocked, prompt the user for the password.
-        if (!securityConcept.state.decryptedToken) {
+        // For remote projects, if the session is not already unlocked, prompt the user for the password.
+        if (provider !== 'local' && !securityConcept.state.decryptedToken) {
           console.log('[Sync] Session is locked. Showing unlock modal.');
           uiConcept.actions.showUnlockSessionModal({ projectName: project.name });
           return; // Stop further processing until unlocked
+        } else {
+          // For local projects, or unlocked remote projects, load the diagrams immediately.
+          console.log('[Sync] Project is local or session is unlocked. Proceeding to load diagrams.');
+          diagramConcept.actions.loadDiagramsForProject({ projectId: project.id });
         }
-        diagramConcept.actions.loadDiagramsForProject({ projectId: project.id });
       } else {
         // Handle case where project is deselected
         diagramConcept.actions.setDiagrams([]);
@@ -99,6 +102,16 @@ export const synchronizations = [
       const finalName = name.endsWith('.mmd') ? name : `${name}.mmd`;
 
       console.log(`[Sync] Handling diagramCreationRequested: "${finalName}" in project ${projectId}`);
+
+      // --- Pre-creation Validation ---
+      const existingDiagrams = await storageConcept.actions.getDiagramsByProjectId(projectId);
+      if (existingDiagrams.some(d => d.title === finalName)) {
+        const message = `A diagram named "${finalName}" already exists in this project.`;
+        console.error(`[Sync] ${message}`);
+        uiConcept.actions.showNotification({ message, type: 'error' });
+        return; // Stop the creation process
+      }
+
       const newDiagram = {
         projectId,
         title: finalName,
@@ -120,6 +133,9 @@ export const synchronizations = [
         });
         // After successfully adding, reload the diagram list for the project to reflect the change.
         diagramConcept.actions.loadDiagramsForProject({ projectId });
+        // --- NEW ---
+        // And immediately select the new diagram to be active in the editor.
+        diagramConcept.actions.loadDiagramContent({ diagramId: newId });
         syncConcept.actions.triggerSync(); // Trigger sync after creating a diagram
         console.log(`[Sync] Diagram "${name}" created and added to sync queue.`);
       } catch (error) {
@@ -317,6 +333,12 @@ export const synchronizations = [
         projects,
         activeProjectId: projectConcept.state.activeProjectId,
       });
+      // If projects exist but none are active, automatically select the first one.
+      // This handles the initial application load.
+      if (projects.length > 0 && !projectConcept.state.activeProjectId) {
+        console.log('[Sync] No active project. Auto-selecting the first project.');
+        projectConcept.actions.setActiveProject(projects[0].id);
+      }
     },
   },
   {
@@ -522,6 +544,86 @@ export const synchronizations = [
         projectConcept.actions.deleteProject(projectId);
       } else {
         alert('No project selected to delete.');
+      }
+    },
+  },
+  {
+    when: 'ui:diagramsUploaded',
+    from: uiConcept,
+    do: ({ diagrams }) => {
+      const projectId = projectConcept.state.activeProjectId;
+      if (!projectId) {
+        return uiConcept.actions.showNotification({ message: 'Please select a project before uploading.', type: 'error' });
+      }
+
+      console.log(`[Sync] Handling upload of ${diagrams.length} diagrams to project ${projectId}.`);
+
+      // Use the existing diagram creation flow for each uploaded file.
+      // This ensures validation, sync queueing, and UI updates are all handled correctly.
+      diagrams.forEach(diagram => {
+        console.log(`[Sync] Calling createDiagram for uploaded file: "${diagram.name}"`);
+        diagramConcept.actions.createDiagram({ name: diagram.name, projectId, content: diagram.content });
+      });
+
+      uiConcept.actions.showNotification({ message: `Successfully imported ${diagrams.length} diagram(s).`, type: 'success' });
+    },
+  },
+  {
+    when: 'ui:exportMmdClicked',
+    from: uiConcept,
+    do: () => {
+      const diagram = diagramConcept.state.activeDiagram;
+      console.log('[Sync] Handling export .mmd request.');
+
+      if (diagram && diagram.id) { // Check for a saved diagram
+        console.log(`[Sync] Exporting diagram: "${diagram.title}"`);
+        uiConcept.actions.downloadFile({
+          filename: diagram.title,
+          content: diagram.content,
+          mimeType: 'text/plain', // .mmd is just plain text
+        });
+      } else {
+        console.warn('[Sync] Export .mmd clicked, but no saved diagram is active.');
+        uiConcept.actions.showNotification({ message: 'Please save the diagram before exporting.', type: 'info' });
+      }
+    },
+  },
+  {
+    when: 'ui:downloadProjectClicked',
+    from: uiConcept,
+    do: async () => {
+      const activeProjectId = projectConcept.state.activeProjectId;
+      const activeProject = projectConcept.state.projects.find(p => p.id === activeProjectId);
+
+      if (!activeProject) {
+        console.error('[Sync] Download requested, but no active project.');
+        return uiConcept.actions.showNotification({ message: 'Please select a project to download.', type: 'error' });
+      }
+
+      console.log(`[Sync] Handling download for project "${activeProject.name}". Fetching diagrams...`);
+
+      try {
+        const diagrams = await storageConcept.actions.getDiagramsByProjectId(activeProjectId);
+        if (diagrams.length === 0) {
+          return uiConcept.actions.showNotification({ message: 'Project has no diagrams to download.', type: 'info' });
+        }
+
+        console.log(`[Sync] Found ${diagrams.length} diagrams. Creating zip file...`);
+        const zip = new JSZip();
+        diagrams.forEach(diagram => {
+          console.log(`[Sync] Adding "${diagram.title}" to zip.`);
+          zip.file(diagram.title, diagram.content);
+        });
+
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const safeProjectName = activeProject.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const filename = `${safeProjectName}_project.zip`;
+
+        console.log(`[Sync] Triggering download of "${filename}".`);
+        uiConcept.actions.downloadFile({ filename, content: zipBlob });
+      } catch (error) {
+        console.error('[Sync] Failed to create zip for project download:', error);
+        uiConcept.actions.showNotification({ message: 'Failed to download project.', type: 'error' });
       }
     },
   },

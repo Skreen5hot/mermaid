@@ -332,7 +332,11 @@ function _hideUnlockSessionModal() {
 }
 
 function _attachEventListeners() {
-    elements['project-selector']?.addEventListener('change', (e) => notify('ui:projectSelected', { projectId: parseInt(e.target.value, 10) }));
+    elements['project-selector']?.addEventListener('change', (e) => {
+        const selectedId = parseInt(e.target.value, 10);
+        console.log(`[UI] Project selector changed. Notifying with new project ID: ${selectedId}`);
+        notify('ui:projectSelected', { projectId: selectedId });
+    });
     elements['new-project-btn']?.addEventListener('click', () => {
         console.log('[UI] "New Project" button clicked. Showing connect modal.');
         _showConnectProjectModal();
@@ -446,6 +450,35 @@ function _attachEventListeners() {
 
     // Fullscreen toggle
     elements['fullscreen-btn']?.addEventListener('click', () => _toggleFullscreen());
+
+    elements['upload-diagrams-input']?.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      console.log(`[UI] ${files.length} file(s) selected for upload.`);
+
+      const fileReadPromises = Array.from(files).map(file => {
+          return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (event) => resolve({ name: file.name, content: event.target.result });
+              reader.onerror = (error) => reject(error);
+              reader.readAsText(file);
+          });
+      });
+
+      Promise.all(fileReadPromises)
+          .then(diagrams => {
+              console.log('[UI] Files read successfully. Notifying with diagram data:', diagrams);
+              notify('ui:diagramsUploaded', { diagrams });
+          })
+          .catch(error => {
+              console.error('[UI] Error reading uploaded files:', error);
+              _showNotification({ message: 'Error reading uploaded files.', type: 'error' });
+          });
+
+      // Reset the input so the user can upload the same file again if they wish
+      e.target.value = '';
+  });
 }
 
 function _switchTab(tabName) {
