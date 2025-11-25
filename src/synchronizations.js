@@ -206,69 +206,90 @@ export const synchronizations = [
   {
     when: 'projectCreationRequested',
     from: projectConcept,
-    do: async ({ gitProvider, repositoryPath, token, password }) => {
-      console.log(`[Sync] Handling projectCreationRequested for repo: ${repositoryPath}`);
-      uiConcept.actions.showNotification({ message: `Connecting to ${repositoryPath}...`, type: 'info' });
+    do: async ({ gitProvider, name, repositoryPath, token, password }) => {
+      console.log(`[Sync] Handling projectCreationRequested for provider: ${gitProvider}, name: ${name || repositoryPath}`);
+      uiConcept.actions.showNotification({ message: `Creating project "${name || repositoryPath}"...`, type: 'info' });
       try {
-        const provider = gitProvider.toLowerCase();
-        const adapters = {
-          github: githubAdapter,
-          gitlab: gitlabAdapter,
-        };
+        let newProject;
 
-        const adapter = adapters[provider];
-        if (!adapter) {
-          throw new Error(`Provider "${gitProvider}" is not supported.`);
+        if (gitProvider === 'local') {
+          // For local projects, no Git interaction is needed.
+          console.log(`[Sync] Creating local project: "${name}"`);
+          newProject = {
+            name: name,
+            gitProvider: 'local',
+            repositoryPath: null,
+            defaultBranch: null,
+            lastSyncSha: null,
+            encryptedToken: null, // No token for local projects
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+        } else {
+          // Existing logic for Git-connected projects
+          const provider = gitProvider.toLowerCase();
+          const adapters = {
+            github: githubAdapter,
+            gitlab: gitlabAdapter,
+          };
+
+          const adapter = adapters[provider];
+          if (!adapter) {
+            throw new Error(`Provider "${gitProvider}" is not supported.`);
+          }
+
+          // 1. Configure the Git Abstraction Layer
+          gitAbstractionConcept.actions.setProvider(provider, adapter);
+
+          // 2. Validate repository and get default branch
+          let owner, repo;
+          try {
+            // Handle full URLs by extracting the path
+            const url = new URL(repositoryPath);
+            const pathParts = url.pathname.split('/').filter(p => p); // e.g., ['Skreen5hot', 'vanilla']
+            owner = pathParts[0];
+            repo = pathParts[1];
+          } catch (e) {
+            // Not a URL, assume it's already in owner/repo format
+            [owner, repo] = repositoryPath.split('/');
+          }
+          if (!owner || !repo) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
+          console.log('[Sync] Validating repository...');
+          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(owner, repo, token);
+          const defaultBranch = repoInfo.default_branch;
+          console.log(`[Sync] Repository validated. Default branch: ${defaultBranch}.`);
+
+          // 3. Encrypt the token
+          const encryptedToken = await securityConcept.actions.encryptToken(token, password);
+          console.log('[Sync] Token encrypted successfully.');
+
+          // 4. Prepare the project object for storage
+          newProject = {
+            name: name || repositoryPath, // Use provided name, or repositoryPath as default
+            gitProvider,
+            repositoryPath: `${owner}/${repo}`, // Store the canonical owner/repo path
+            defaultBranch,
+            lastSyncSha: null,
+            encryptedToken, // This is an object: { ciphertext, salt, iv }
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
         }
-
-        // 1. Configure the Git Abstraction Layer
-        gitAbstractionConcept.actions.setProvider(provider, adapter);
-
-        // 2. Validate repository and get default branch
-        let owner, repo;
-        try {
-          // Handle full URLs by extracting the path
-          const url = new URL(repositoryPath);
-          const pathParts = url.pathname.split('/').filter(p => p); // e.g., ['Skreen5hot', 'vanilla']
-          owner = pathParts[0];
-          repo = pathParts[1];
-        } catch (e) {
-          // Not a URL, assume it's already in owner/repo format
-          [owner, repo] = repositoryPath.split('/');
-        }
-        if (!owner || !repo) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
-        console.log('[Sync] Validating repository...');
-        const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(owner, repo, token);
-        const defaultBranch = repoInfo.default_branch;
-        console.log(`[Sync] Repository validated. Default branch: ${defaultBranch}.`);
-
-        // 3. Encrypt the token
-        const encryptedToken = await securityConcept.actions.encryptToken(token, password);
-        console.log('[Sync] Token encrypted successfully.');
-
-        // 4. Prepare the project object for storage
-        const newProject = {
-          name: repositoryPath,
-          gitProvider,
-          repositoryPath: `${owner}/${repo}`, // Store the canonical owner/repo path
-          defaultBranch,
-          lastSyncSha: null,
-          encryptedToken, // This is an object: { ciphertext, salt, iv }
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
 
         // 5. Save the new project to IndexedDB
-        await storageConcept.actions.addProject(newProject);
+        const newProjectId = await storageConcept.actions.addProject(newProject); // Capture the new ID
         console.log('[Sync] New project saved successfully.');
 
         // 6. Refresh the project list in the application state
         projectConcept.actions.loadProjects();
 
+        // --- NEW: Set the newly created project as active ---
+        projectConcept.actions.setActiveProject(newProjectId);
+
         // 7. Close the modal and show a success notification
         uiConcept.actions.hideConnectProjectModal();
-        uiConcept.actions.showNotification({
-          message: `Project "${repositoryPath}" connected successfully!`,
+        uiConcept.actions.showNotification({ // Use the project's actual name for the notification
+          message: `Project "${newProject.name}" connected successfully!`,
           type: 'success',
         });
       } catch (error) {

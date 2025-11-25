@@ -9,7 +9,13 @@ function setupMockDOM() {
     mockElements = {};
     const ids = [
         'project-selector', 'code-editor', 'new-modal', 'new-name', 'new-create-btn',
-        'connect-project-modal', 'unlock-session-modal', 'toast-container', 'split-view-btn',
+        'connect-project-modal', 'connect-provider', 'connect-repo-path', 'connect-token',
+        'connect-password', 'connect-password-confirm', 'connect-password-error',
+        'connect-submit-btn', 'connect-local-project-name', 'connect-local-project-name-group',
+        'connect-git-fields-group', 'connect-master-password-group',
+        'unlock-session-modal', 'unlock-project-name', 'unlock-password', 'unlock-error',
+        'unlock-submit-btn',
+        'toast-container', 'split-view-btn',
         'content-area', 'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'fullscreen-btn'
     ];
 
@@ -33,7 +39,9 @@ function setupMockDOM() {
                 },
                 contains: function(className) { return this._classes.has(className) }
             },
-            listeners: {},
+            listeners: {}, // For addEventListener
+            _inputListeners: [], // For input event
+            _changeListeners: [], // For change event
             addEventListener: function(event, callback) {
                 if (!this.listeners[event]) this.listeners[event] = [];
                 this.listeners[event].push(callback);
@@ -42,7 +50,10 @@ function setupMockDOM() {
             _trigger: function(event, eventData = {}) {
                 (this.listeners[event] || []).forEach(cb => cb({ target: this, ...eventData }));
             },
-            focus: () => { this._isFocused = true; }
+            focus: () => { this._isFocused = true; },
+            // Specific for input/select elements
+            get value() { return this._value; },
+            set value(val) { this._value = val; }
         };
     });
 
@@ -164,6 +175,119 @@ describe('UI Concept', () => {
             assert.strictEqual(notifiedEvent, 'ui:createDiagramClicked', 'Event name should be correct');
             assert.deepStrictEqual(notifiedPayload, { name: 'My New Diagram' }, 'Payload should contain the new diagram name');
         });
+    });
+
+    describe('Connect Project Modal Logic', () => {
+        let connectProviderSelect, connectLocalProjectNameInput, connectLocalProjectNameGroup,
+            connectGitFieldsGroup, connectMasterPasswordGroup, connectRepoPathInput, connectTokenInput,
+            connectPasswordInput, connectPasswordConfirmInput, connectPasswordError, connectSubmitBtn;
+
+        beforeEach(() => {
+            // Cache elements for easier access in these tests
+            connectProviderSelect = mockElements['connect-provider'];
+            connectLocalProjectNameInput = mockElements['connect-local-project-name'];
+            connectLocalProjectNameGroup = mockElements['connect-local-project-name-group'];
+            connectGitFieldsGroup = mockElements['connect-git-fields-group'];
+            connectMasterPasswordGroup = mockElements['connect-master-password-group'];
+            connectRepoPathInput = mockElements['connect-repo-path'];
+            connectTokenInput = mockElements['connect-token'];
+            connectPasswordInput = mockElements['connect-password'];
+            connectPasswordConfirmInput = mockElements['connect-password-confirm'];
+            connectPasswordError = mockElements['connect-password-error'];
+            connectSubmitBtn = mockElements['connect-submit-btn'];
+
+            // Ensure modal is shown and initial state is set
+            uiConcept.actions.showConnectProjectModal();
+        });
+
+        it('[UNIT] should initially show Git fields and hide Local fields', () => {
+            assert.strictEqual(connectProviderSelect.value, 'github', 'Default provider should be github');
+            assert.strictEqual(connectLocalProjectNameGroup.style.display, 'none', 'Local name group should be hidden');
+            assert.strictEqual(connectGitFieldsGroup.style.display, 'block', 'Git fields group should be visible');
+            assert.strictEqual(connectMasterPasswordGroup.style.display, 'block', 'Master password group should be visible');
+        });
+
+        it('[UNIT] should show Local fields and hide Git fields when "Local" is selected', () => {
+            connectProviderSelect.value = 'local';
+            connectProviderSelect._trigger('change');
+
+            assert.strictEqual(connectLocalProjectNameGroup.style.display, 'block', 'Local name group should be visible');
+            assert.strictEqual(connectGitFieldsGroup.style.display, 'none', 'Git fields group should be hidden');
+            assert.strictEqual(connectMasterPasswordGroup.style.display, 'none', 'Master password group should be hidden');
+        });
+
+        it('[UNIT] should disable submit button for local project if name is empty', () => {
+            connectProviderSelect.value = 'local';
+            connectProviderSelect._trigger('change'); // Update visibility and button state
+            connectLocalProjectNameInput.value = '';
+            connectLocalProjectNameInput._trigger('input'); // Trigger input event
+
+            assert.isTrue(connectSubmitBtn.disabled, 'Submit button should be disabled if local name is empty');
+        });
+
+        it('[UNIT] should enable submit button for local project if name is filled', () => {
+            connectProviderSelect.value = 'local';
+            connectProviderSelect._trigger('change');
+            connectLocalProjectNameInput.value = 'My Local Project';
+            connectLocalProjectNameInput._trigger('input');
+
+            assert.isFalse(connectSubmitBtn.disabled, 'Submit button should be enabled if local name is filled');
+        });
+
+        it('[UNIT] should disable submit button for Git project if fields are empty', () => {
+            connectProviderSelect.value = 'github';
+            connectProviderSelect._trigger('change');
+            connectRepoPathInput.value = ''; // Ensure empty
+            connectTokenInput.value = '';
+            connectPasswordInput.value = '';
+            connectPasswordConfirmInput.value = '';
+            connectRepoPathInput._trigger('input'); // Trigger an input event
+
+            assert.isTrue(connectSubmitBtn.disabled, 'Submit button should be disabled if Git fields are empty');
+        });
+
+        it('[UNIT] should disable submit button for Git project if passwords do not match', () => {
+            connectProviderSelect.value = 'github';
+            connectProviderSelect._trigger('change');
+            connectRepoPathInput.value = 'owner/repo';
+            connectTokenInput.value = 'token';
+            connectPasswordInput.value = 'pass1';
+            connectPasswordConfirmInput.value = 'pass2';
+            connectPasswordConfirmInput._trigger('input'); // Trigger input event
+
+            assert.isTrue(connectSubmitBtn.disabled, 'Submit button should be disabled if passwords do not match');
+            assert.strictEqual(connectPasswordError.style.display, 'block', 'Password error should be visible');
+        });
+
+        it('[UNIT] should enable submit button for Git project if all fields are filled and passwords match', () => {
+            connectProviderSelect.value = 'github';
+            connectProviderSelect._trigger('change');
+            connectRepoPathInput.value = 'owner/repo';
+            connectTokenInput.value = 'token';
+            connectPasswordInput.value = 'password';
+            connectPasswordConfirmInput.value = 'password';
+            connectPasswordConfirmInput._trigger('input'); // Trigger input event
+
+            assert.isFalse(connectSubmitBtn.disabled, 'Submit button should be enabled if all Git fields are valid');
+            assert.strictEqual(connectPasswordError.style.display, 'none', 'Password error should be hidden');
+        });
+
+        it('[UNIT] should notify with correct payload for local project creation', () => {
+            let notifiedPayload = null;
+            uiConcept.subscribe((event, payload) => { if (event === 'ui:connectProjectClicked') notifiedPayload = payload; });
+
+            connectProviderSelect.value = 'local';
+            connectProviderSelect._trigger('change');
+            connectLocalProjectNameInput.value = 'My Local Project';
+            connectLocalProjectNameInput._trigger('input');
+            connectSubmitBtn._trigger('click');
+
+            assert.deepStrictEqual(notifiedPayload, { gitProvider: 'local', name: 'My Local Project' }, 'Payload for local project should be correct');
+            assert.strictEqual(mockElements['connect-project-modal'].style.display, 'none', 'Connect modal should be hidden');
+        });
+
+        // Git project payload is already covered by an existing integration test in synchronizations.test.js
+        // and the ui:connectProjectClicked event listener in uiConcept.js now relies on the button's disabled state.
     });
 
     describe('View Toggles', () => {

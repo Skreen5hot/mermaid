@@ -45,6 +45,10 @@ function _cacheElements() {
         'connect-repo-path', 'connect-token', 'connect-password',
         'connect-password-confirm', 'connect-password-error',
         'connect-cancel-btn', 'connect-submit-btn', 'unlock-session-modal',
+        // New elements for local project creation
+        'connect-local-project-name', 'connect-local-project-name-group',
+        'connect-git-fields-group', 'connect-master-password-group',
+        // Existing elements
         'unlock-project-name', 'unlock-password', 'unlock-error',
         'unlock-cancel-btn', 'unlock-submit-btn', 'toast-container',
         'export-mmd-btn', 'render-btn',
@@ -304,6 +308,7 @@ function _showConnectProjectModal() {
     if (elements['connect-project-modal']) {
         elements['connect-project-modal'].style.display = 'flex';
         // Reset form fields
+        elements['connect-provider'].value = 'github'; // Default to GitHub
         ['connect-repo-path', 'connect-token', 'connect-password', 'connect-password-confirm'].forEach(id => elements[id].value = '');
         elements['connect-submit-btn'].disabled = true;
     }
@@ -397,36 +402,34 @@ function _attachEventListeners() {
     elements['new-cancel-btn']?.addEventListener('click', _hideNewDiagramModal);
     elements['render-btn']?.addEventListener('click', () => notify('ui:renderDiagramRequested'));
 
-    // --- Connect Project Modal Listeners ---
-    const connectInputs = ['connect-repo-path', 'connect-token', 'connect-password', 'connect-password-confirm'];
-    connectInputs.forEach(id => {
-        elements[id]?.addEventListener('input', () => {
-            const allFilled = connectInputs.every(i => elements[i].value.trim() !== '');
-            const passwordsMatch = elements['connect-password'].value === elements['connect-password-confirm'].value;
-            
-            elements['connect-password-error'].style.display = (elements['connect-password'].value && elements['connect-password-confirm'].value && !passwordsMatch) ? 'block' : 'none';
-            elements['connect-submit-btn'].disabled = !(allFilled && passwordsMatch);
-        });
-    });
-
     elements['connect-cancel-btn']?.addEventListener('click', _hideConnectProjectModal);
 
-    elements['connect-submit-btn']?.addEventListener('click', () => {
+    elements['connect-submit-btn']?.addEventListener('click', (e) => {
         console.log('[UI] "Encrypt & Connect" button clicked.');
-        const payload = {
-            gitProvider: elements['connect-provider'].value,
-            repositoryPath: elements['connect-repo-path'].value.trim(),
-            token: elements['connect-token'].value.trim(),
-            password: elements['connect-password'].value,
-        };
+        const gitProvider = connectProviderSelect.value;
+        let payload;
+
+        if (gitProvider === 'local') {
+            payload = {
+                gitProvider: 'local',
+                name: connectLocalProjectNameInput.value.trim(),
+            };
+        } else {
+            payload = {
+                gitProvider: gitProvider,
+                name: connectRepoPathInput.value.trim(), // Use repo path as default name for Git projects
+                repositoryPath: connectRepoPathInput.value.trim(),
+                token: connectTokenInput.value.trim(),
+                password: connectPasswordInput.value,
+            };
+        }
+
 
         // Basic validation check before notifying
-        if (payload.repositoryPath && payload.token && payload.password) {
-            notify('ui:connectProjectClicked', payload);
-            _hideConnectProjectModal();
-        } else {
-            alert('Please fill out all fields.');
-        }
+        // The button should only be enabled if all fields are filled and passwords match (if applicable).
+        // So, if we reach here, we can assume validation passed.
+        notify('ui:connectProjectClicked', payload);
+        _hideConnectProjectModal();
     });
 
     // --- Unlock Session Modal Listeners ---
@@ -450,6 +453,50 @@ function _attachEventListeners() {
 
     // Fullscreen toggle
     elements['fullscreen-btn']?.addEventListener('click', () => _toggleFullscreen());
+
+    // --- Connect Project Modal Listeners ---
+    const connectProviderSelect = elements['connect-provider'];
+    const connectLocalProjectNameInput = elements['connect-local-project-name'];
+    const connectLocalProjectNameGroup = elements['connect-local-project-name-group'];
+    const connectGitFieldsGroup = elements['connect-git-fields-group'];
+    const connectMasterPasswordGroup = elements['connect-master-password-group'];
+    const connectRepoPathInput = elements['connect-repo-path'];
+    const connectTokenInput = elements['connect-token'];
+    const connectPasswordInput = elements['connect-password'];
+    const connectPasswordConfirmInput = elements['connect-password-confirm'];
+    const connectPasswordError = elements['connect-password-error'];
+    const connectSubmitBtn = elements['connect-submit-btn'];
+
+    const updateConnectModalVisibility = () => {
+        const isLocal = connectProviderSelect.value === 'local';
+        connectLocalProjectNameGroup.style.display = isLocal ? 'block' : 'none';
+        connectGitFieldsGroup.style.display = isLocal ? 'none' : 'block';
+        // Master password group is only for Git providers
+        connectMasterPasswordGroup.style.display = isLocal ? 'none' : 'block';
+        _updateConnectButtonState();
+    };
+
+    const _updateConnectButtonState = () => {
+        const isLocal = connectProviderSelect.value === 'local';
+        let allFilled;
+        let passwordsMatch = true;
+
+        if (isLocal) {
+            allFilled = connectLocalProjectNameInput.value.trim() !== '';
+        } else {
+            allFilled = connectRepoPathInput.value.trim() !== '' && connectTokenInput.value.trim() !== '';
+            passwordsMatch = connectPasswordInput.value === connectPasswordConfirmInput.value;
+            connectPasswordError.style.display = (connectPasswordInput.value && connectPasswordConfirmInput.value && !passwordsMatch) ? 'block' : 'none';
+        }
+        connectSubmitBtn.disabled = !(allFilled && passwordsMatch);
+    };
+
+    connectProviderSelect?.addEventListener('change', updateConnectModalVisibility);
+    connectLocalProjectNameInput?.addEventListener('input', _updateConnectButtonState);
+    [connectRepoPathInput, connectTokenInput, connectPasswordInput, connectPasswordConfirmInput].forEach(el => el?.addEventListener('input', _updateConnectButtonState));
+
+    // Initial call to set correct visibility and button state
+    updateConnectModalVisibility();
 
     elements['upload-diagrams-input']?.addEventListener('change', (e) => {
       const files = e.target.files;

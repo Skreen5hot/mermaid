@@ -99,23 +99,33 @@
         <select id="connect-provider">
             <option value="github" selected>GitHub</option>
             <option value="gitlab">GitLab</option>
+            <option value="local">Local</option>
         </select>
 
-        <label for="connect-repo-path">Repository Path (e.g., owner/repo)</label>
-        <input type="text" id="connect-repo-path" placeholder="your-username/your-repo-name" required>
+        <div id="connect-local-project-name-group" style="display: none;">
+            <label for="connect-local-project-name">Project Name</label>
+            <input type="text" id="connect-local-project-name" placeholder="My Awesome Project" required>
+        </div>
 
-        <label for="connect-token">Personal Access Token</label>
-        <input type="password" id="connect-token" placeholder="ghp_... or glpat_..." required>
+        <div id="connect-git-fields-group">
+            <label for="connect-repo-path">Repository Path (e.g., owner/repo)</label>
+            <input type="text" id="connect-repo-path" placeholder="your-username/your-repo-name" required>
 
-        <h3>Create a Master Password</h3>
-        <p>This password encrypts your token in the browser. It is never stored or sent anywhere.</p>
+            <label for="connect-token">Personal Access Token</label>
+            <input type="password" id="connect-token" placeholder="ghp_... or glpat_..." required>
 
-        <label for="connect-password">Master Password</label>
-        <input type="password" id="connect-password" required>
+            <div id="connect-master-password-group">
+                <h3>Create a Master Password</h3>
+                <p>This password encrypts your token in the browser. It is never stored or sent anywhere.</p>
 
-        <label for="connect-password-confirm">Confirm Master Password</label>
-        <input type="password" id="connect-password-confirm" required>
-        <div id="connect-password-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Passwords do not match.</div>
+                <label for="connect-password">Master Password</label>
+                <input type="password" id="connect-password" required>
+
+                <label for="connect-password-confirm">Confirm Master Password</label>
+                <input type="password" id="connect-password-confirm" required>
+                <div id="connect-password-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Passwords do not match.</div>
+            </div>
+        </div>
 
         <div class="modal-buttons">
             <button id="connect-cancel-btn">Cancel</button>
