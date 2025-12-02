@@ -10,7 +10,7 @@ describe('Sync Concept', () => {
   let originalStorageActions;
   let originalGalActions;
 
-  const project = { id: 1, repositoryPath: 'owner/repo', lastSyncSha: 'old-tree-sha' };
+  const project = { id: 1, repositoryPath: 'owner/repo', defaultBranch: 'main', lastSyncSha: 'old-commit-sha' };
   const token = 'fake-token';
   
   beforeEach(() => {
@@ -33,11 +33,12 @@ describe('Sync Concept', () => {
     };
 
     const mockGal = {
-      getTreeSha: () => Promise.resolve('new-tree-sha'),
+      getLatestCommit: () => Promise.resolve({ sha: 'new-commit-sha' }),
       listContents: () => Promise.resolve([]),
       getContents: () => Promise.resolve({ content: '', sha: '' }),
       putContents: () => Promise.resolve({ content: { sha: 'new-sha-from-put' } }),
       deleteContents: () => Promise.resolve(),
+      getTreeSha: () => Promise.resolve('deprecated-tree-sha'), // Keep for any old references if needed
     };
 
     // Replace the entire actions object with our mocks
@@ -196,38 +197,27 @@ describe('Sync Concept', () => {
   });
 
   describe('Conflict Resolution', () => {
-    it('[UNIT] Conflict Resolution - Fallback: should create a conflict file', async () => {
-      let conflictFileCreated = false;
-      const queueItem = { id: 1, action: 'update', payload: { title: 'conflict.mmd', content: 'local content', sha: 'base-sha' } };
-      storageConcept.actions.getSyncQueueItems = () => Promise.resolve([queueItem]);
-      storageConcept.actions.deleteSyncQueueItem = () => Promise.resolve();
-      
-      // First call to putContents will fail with 409
-      let putCount = 0;
-      gitAbstractionConcept.actions.putContents = (owner, repo, path, content, message, sha) => {
-        putCount++;
-        if (putCount === 1) {
-          throw new Error('409 Conflict');
-        }
-        // Second call is for creating the conflict file
-        conflictFileCreated = true;
-        assert.include(path, '_conflict_', 'Should create a file with _conflict_ in the name');
-        assert.strictEqual(content, 'local content', 'Conflict file should have local content');
-        return Promise.resolve({ content: { sha: 'conflict-sha' } });
-      };
+    it('[UNIT] Conflict Resolution - Remote Wins: should overwrite local content with remote content', async () => {
+      let updateDiagramCalledWith = null;
 
-      // Mock getContents for fetching BASE and REMOTE versions
-      let getCount = 0;
-      gitAbstractionConcept.actions.getContents = (owner, repo, path, token, ref) => {
-        getCount++;
-        if (ref === 'base-sha') return Promise.resolve({ content: 'base content', sha: 'base-sha' }); // BASE
-        return Promise.resolve({ content: 'remote content', sha: 'remote-sha' }); // REMOTE
-      };
+      // Arrange: Simulate a scenario where the remote has changed since the last sync.
+      // 1. The latest commit on the remote is different from our last known commit.
+      gitAbstractionConcept.actions.getLatestCommit = () => Promise.resolve({ sha: 'new-commit-sha' });
+      // 2. The local DB has a diagram with an old file SHA.
+      const localDiagram = { id: 1, title: 'conflict.mmd', content: 'local changes', lastModifiedRemoteSha: 'old-file-sha' };
+      storageConcept.actions.getDiagramsByProjectId = () => Promise.resolve([localDiagram]);
+      // 3. The remote repo lists the same file, but with a new file SHA.
+      const remoteFile = { name: 'conflict.mmd', path: 'mermaid/conflict.mmd', sha: 'new-file-sha' };
+      gitAbstractionConcept.actions.listContents = () => Promise.resolve([remoteFile]);
+      // 4. When we fetch the remote content, it's different.
+      gitAbstractionConcept.actions.getContents = () => Promise.resolve({ content: 'remote changes', sha: 'new-file-sha' });
+      // 5. Spy on updateDiagram to see what it gets called with.
+      storageConcept.actions.updateDiagram = (diagram) => { updateDiagramCalledWith = diagram; return Promise.resolve(); };
 
       await syncConcept.actions._performSync(project, token);
 
-      assert.strictEqual(getCount, 2, 'getContents should be called twice (for base and remote)');
-      assert.isTrue(conflictFileCreated, 'A new conflict file should have been created via putContents');
+      assert.isNotNull(updateDiagramCalledWith, 'storageConcept.updateDiagram should have been called');
+      assert.strictEqual(updateDiagramCalledWith.content, 'remote changes', 'The diagram should be updated with the content from the remote');
     });
   });
 });

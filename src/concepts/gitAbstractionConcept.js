@@ -23,6 +23,7 @@ function notify(event, payload) {
  * @property {(owner: string, repo: string, path: string, token: string) => Promise<string | null>} getTreeSha
  * @property {(owner: string, repo: string, path: string, content: string, message: string, sha: string | null, token: string) => Promise<any>} putContents
  * @property {(owner: string, repo: string, path: string, message: string, sha: string, token: string) => Promise<any>} deleteContents
+ * @property {(owner: string, repo: string, branch: string, token: string) => Promise<{sha: string}>} getLatestCommit
  */
 
 export const gitAbstractionConcept = {
@@ -111,6 +112,15 @@ export const gitAbstractionConcept = {
     deleteContents(...args) {
       gitAbstractionConcept.actions._assertAdapter();
       return gitAbstractionConcept.state.adapter.deleteContents(...args);
+    },
+
+    /**
+     * Gets the latest commit of a branch.
+     * @returns {Promise<{sha: string}>}
+     */
+    getLatestCommit(...args) {
+      gitAbstractionConcept.actions._assertAdapter();
+      return gitAbstractionConcept.state.adapter.getLatestCommit(...args);
     },
   },
 

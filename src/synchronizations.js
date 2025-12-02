@@ -850,6 +850,13 @@ export const synchronizations = [
         // IndexedDB and render it in the UI.
         diagramConcept.actions.loadDiagramsForProject({ projectId });
       }
+
+      // --- FIX: If the active diagram was affected by the sync, reload its content ---
+      // This ensures the editor and diagram preview update immediately after a conflict resolution.
+      const activeDiagram = diagramConcept.state.activeDiagram;
+      if (activeDiagram && activeDiagram.projectId === projectId) {
+        diagramConcept.actions.loadDiagramContent({ diagramId: activeDiagram.id });
+      }
     },
   },
 

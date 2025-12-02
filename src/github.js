@@ -190,4 +190,18 @@ export const githubAdapter = {
       body: JSON.stringify(body),
     });
   },
+
+  /**
+   * Gets the latest commit SHA for a given branch.
+   * @param {string} owner - The repository owner.
+   * @param {string} repo - The repository name.
+   * @param {string} branch - The branch name.
+   * @param {string} token - The user's PAT.
+   * @returns {Promise<{sha: string}>} An object containing the commit SHA.
+   */
+  async getLatestCommit(owner, repo, branch, token) {
+    const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/branches/${branch}`;
+    const branchInfo = await _githubFetch(url, token);
+    return { sha: branchInfo.commit.sha };
+  },
 };

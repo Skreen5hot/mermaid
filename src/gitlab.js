@@ -193,4 +193,19 @@ export const gitlabAdapter = {
       body: JSON.stringify(body),
     });
   },
+
+  /**
+   * Gets the latest commit SHA for a given branch.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
+   * @param {string} branch - The branch name.
+   * @param {string} token - The user's PAT.
+   * @returns {Promise<{sha: string}>} An object containing the commit SHA.
+   */
+  async getLatestCommit(owner, repo, branch, token) {
+    const projectId = encodeURIComponent(`${owner}/${repo}`);
+    const url = `${GITLAB_API_BASE}/projects/${projectId}/repository/branches/${branch}`;
+    const branchInfo = await _gitlabFetch(url, token);
+    return { sha: branchInfo.commit.id }; // GitLab uses 'id' for the commit SHA in this response
+  },
 };

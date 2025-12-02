@@ -107,17 +107,17 @@ export const syncConcept = {
         const [owner, repo] = project.repositoryPath.split('/');
         const diagramsPath = 'mermaid'; // Standard directory for diagrams
 
-        // 1. Get remote tree SHA and check if a pull is needed
-        const remoteTreeSha = await gitAbstractionConcept.actions.getTreeSha(owner, repo, diagramsPath, token);
+        // 1. Get the latest commit SHA and check if a pull is needed
+        const remoteCommit = await gitAbstractionConcept.actions.getLatestCommit(owner, repo, project.defaultBranch, token);
+        const remoteSha = remoteCommit.sha;
 
         // --- DETAILED LOGGING ---
         console.log(`[Sync Check] Last known local SHA: ${project.lastSyncSha}`);
-        console.log(`[Sync Check] Current remote SHA: ${remoteTreeSha}`);
+        console.log(`[Sync Check] Current remote SHA: ${remoteSha}`);
 
         // If the project has never been synced (lastSyncSha is null), we must pull.
         // Otherwise, we only pull if the remote SHA has changed.
-        const needsPull = project.lastSyncSha === null || (remoteTreeSha && remoteTreeSha !== project.lastSyncSha);
-        if (!needsPull) {
+        if (project.lastSyncSha && remoteSha === project.lastSyncSha) {
           console.log('[Sync] Remote has not changed. Skipping pull phase.');
         } else {
           await pullChanges(project, token, owner, repo, diagramsPath);
@@ -127,9 +127,9 @@ export const syncConcept = {
         await pushChanges(project, token, owner, repo, diagramsPath);
 
         // 4. Update the project's last sync SHA
-        // We fetch the SHA again *after* the push to get the most up-to-date state.
-        const finalRemoteTreeSha = await gitAbstractionConcept.actions.getTreeSha(owner, repo, diagramsPath, token);
-        project.lastSyncSha = finalRemoteTreeSha;
+        // We fetch the commit SHA again *after* the push to get the most up-to-date state.
+        const finalRemoteCommit = await gitAbstractionConcept.actions.getLatestCommit(owner, repo, project.defaultBranch, token);
+        project.lastSyncSha = finalRemoteCommit.sha;
         await storageConcept.actions.updateProject(project);
 
         console.log('[Sync] Push/Pull reconciliation complete.');
@@ -199,8 +199,11 @@ async function pullChanges(project, token, owner, repo, diagramsPath) {
           lastModifiedRemoteSha: sha, createdAt: new Date(), updatedAt: new Date(),
         }));
       pullPromises.push(downloadPromise);
-    } else if (localMatch.lastModifiedRemoteSha !== remoteFile.sha) {
-      console.log(`[Sync] Remote file updated: ${remoteFile.name}. Updating local...`);
+    } else if (localMatch.lastModifiedRemoteSha !== remoteFile.sha) { // File exists locally, check if remote has changed
+      // This is the "Remote Wins" strategy. If the remote file has a different SHA,
+      // we overwrite the local version, regardless of local changes.
+      // Pending local changes in the queue will be handled during the push phase.
+      console.log(`[Pull] Conflict or update detected for "${remoteFile.name}". Remote version wins. Downloading...`);
       const updatePromise = gitAbstractionConcept.actions.getContents(owner, repo, remoteFile.path, token)
         .then(({ content, sha }) => storageConcept.actions.updateDiagram({ ...localMatch, content, lastModifiedRemoteSha: sha, updatedAt: new Date() }));
       pullPromises.push(updatePromise);
@@ -263,33 +266,28 @@ async function pushChanges(project, token, owner, repo, diagramsPath) {
         await storageConcept.actions.deleteSyncQueueItem(item.id);
         console.log(`[Sync] Successfully processed queue item #${item.id} (${action})`);
       } catch (error) {
-        console.error(`[Sync] Failed to process queue item #${item.id} (${action}):`, error);
+        // --- FIX: Handle 409 Conflict during push ---
+        // This should now be rare, but as a safeguard, if we get a 409 it means the remote
+        // changed after our pull check. We should discard the local change and let the
+        // next sync cycle's pull phase correct the local state.
         if (error.message.includes('409')) {
-          console.warn(`[Sync] Conflict detected for ${payload.title}. Resolving...`);
-          const [remote, base] = await Promise.all([
-            gitAbstractionConcept.actions.getContents(owner, repo, filePath, token),
-            gitAbstractionConcept.actions.getContents(owner, repo, filePath, token, payload.sha)
-          ]);
-          const localContent = payload.content;
-          const mergeResult = merge3Way(base.content, localContent, remote.content);
+          console.error(`[Sync] A 409 conflict occurred during push for "${payload.title}". The remote was updated before this push. Discarding local change and pulling remote version.`);
+          await storageConcept.actions.deleteSyncQueueItem(item.id); // Remove the failed item from the queue
 
-          if (mergeResult.clean) {
-            console.log(`[Sync] Auto-merge successful for ${payload.title}. Pushing merged content...`);
-            const mergeCommitMessage = `[Mermaid-IDE] auto-merge diagram: ${payload.title}`;
-            const mergeResponse = await gitAbstractionConcept.actions.putContents(owner, repo, filePath, mergeResult.mergedContent, mergeCommitMessage, remote.sha, token);
-            const diagramToUpdate = await storageConcept.actions.getDiagram(item.diagramId);
-            diagramToUpdate.content = mergeResult.mergedContent;
-            diagramToUpdate.lastModifiedRemoteSha = mergeResponse.content.sha;
+          // --- FIX: Immediately fetch the remote version to resolve the conflict ---
+          const remoteContent = await gitAbstractionConcept.actions.getContents(owner, repo, filePath, token);
+          const diagramToUpdate = await storageConcept.actions.getDiagram(item.diagramId);
+          if (diagramToUpdate) {
+            diagramToUpdate.content = remoteContent.content;
+            diagramToUpdate.lastModifiedRemoteSha = remoteContent.sha;
             await storageConcept.actions.updateDiagram(diagramToUpdate);
-            await storageConcept.actions.deleteSyncQueueItem(item.id);
-          } else {
-            console.warn(`[Sync] Auto-merge failed for ${payload.title}. Creating conflict file.`);
-            const conflictTitle = `${payload.title.replace(/\.mmd$/, '')}_conflict_${Date.now()}.mmd`;
-            const conflictCommitMessage = `[Mermaid-IDE] create conflict file for ${payload.title}`;
-            await gitAbstractionConcept.actions.putContents(owner, repo, `${diagramsPath}/${conflictTitle}`, localContent, conflictCommitMessage, null, token);
-            await storageConcept.actions.deleteSyncQueueItem(item.id);
-            notify('conflictResolved', { originalTitle: payload.title, conflictTitle });
           }
+        } else if (item.action === 'delete' && error.message.includes('404')) {
+          console.warn(`[Sync] Delete failed with 404 for queue item #${item.id}. File likely already deleted. Removing from queue.`);
+          await storageConcept.actions.deleteSyncQueueItem(item.id); // Remove the failed item from the queue
+        } else {
+          console.error(`[Sync] Failed to process queue item #${item.id} (${action}):`, error);
+          // For other errors, we leave the item in the queue to be retried.
         }
       }
     }

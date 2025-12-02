@@ -62,9 +62,7 @@ export const diagramConcept = {
      * @param {{projectId: number}} payload - The project ID.
      */
     loadDiagramsForProject({ projectId }) {
-      // Clear current state before loading new diagrams
       diagramConcept.state.diagrams = [];
-      diagramConcept.state.activeDiagram = null;
       notify('diagramsLoading', { projectId });
       notify('diagramsLoadRequested', { projectId });
     },
