@@ -60,13 +60,13 @@ jobs:
         run: npm run build # Assuming 'build' script creates a 'dist' directory
 
       - name: Setup Pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v5 # UPDATED
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3 # UPDATED
         with:
           path: './dist' # Assuming build output is in 'dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4 # UPDATED
