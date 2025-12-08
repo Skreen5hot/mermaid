@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml
 
-name: Continuous Integration & Security Check
+name: CI, Security & Preview Deploy
 
 on:
   push:
@@ -29,3 +29,44 @@ jobs:
 
       - name: Run security audit
         run: npm run security-check
+
+  deploy:
+    # This job only runs for branches that are NOT main.
+    # Assumes you have a separate deployment for the main branch.
+    if: github.ref != 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: npm run build # Assuming 'build' script creates a 'dist' directory
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: './dist' # Assuming build output is in 'dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
