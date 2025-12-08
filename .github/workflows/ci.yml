@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml
 
-name: CI, Security & Preview Deploy
+name: CI, Security & Deploy
 
 on:
   push:
@@ -26,41 +26,92 @@ jobs:
         run: npm run security-check
 
 ---
-
-  deploy:
-    # 🎯 FIX: NO IF STATEMENT HERE - The job will ALWAYS be scheduled and visible.
+  
+  # 🎯 JOB 1: PRODUCTION DEPLOYMENT (main branch)
+  deploy-main:
+    # ✅ Runs only on main
+    if: github.ref == 'refs/heads/main'
     needs: build-and-test
     runs-on: ubuntu-latest
-    # Permissions and environment are optional since we aren't deploying, 
-    # but we keep them for context.
     permissions:
       pages: write
       id-token: write
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Log Current Branch
-        run: echo "Starting deployment check on branch: ${{ github.ref_name }}"
+      # --- Deployment Steps for Root Path ---
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm install
+      - name: Build project
+        run: npm run build 
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist' 
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
-      # --- 🔑 THE KEY PROOF STEP ---
-      - name: Conditional DEV Deployment Action
-        # This step ONLY runs if the branch is exactly 'dev'
-        if: github.ref == 'refs/heads/dev'
+---
+
+  # 🎯 JOB 2: DEV PREVIEW DEPLOYMENT (dev branch)
+  deploy-dev:
+    # 💡 TRICK: Forces the job to appear in the UI even if the upstream job succeeded.
+    # This helps diagnose the conditional failure.
+    if: success() || failure()
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: dev-preview # Unique environment name for separate URL
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # 1. CONDITIONAL CHECK (The actual gate)
+      - name: Check Branch is DEV
+        # ❌ FAIL IF NOT DEV: This is a custom script that fails the job if it's not 'dev'.
+        if: github.ref != 'refs/heads/dev'
         run: |
-          echo "################################################################"
-          echo "## LOGIC SUCCESS: This is the DEV branch. Actual deployment code would execute here."
-          echo "## BASE PATH: /${{ github.ref_name }}/"
-          echo "################################################################"
-          # The actual deployment code (configure-pages, upload, deploy) would go here.
-          
-      - name: Conditional MAIN Deployment Action
-        # This step ONLY runs if the branch is exactly 'main'
-        if: github.ref == 'refs/heads/main'
-        run: |
-          echo "################################################################"
-          echo "## LOGIC SUCCESS: This is the MAIN branch. Actual deployment code would execute here."
-          echo "## BASE PATH: /"
-          echo "################################################################"
-          # The actual deployment code (configure-pages, upload, deploy) would go here.
+          echo "Branch is not 'dev' (${{ github.ref_name }}). Skipping deployment."
+          exit 1
+        
+      # 2. PROCEED TO DEPLOYMENT (Only runs if the above step didn't fail)
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm install
+      - name: Build project
+        run: npm run build 
+      
+      # 3. CONFIGURE PAGES WITH BASE PATH
+      - name: Setup Pages with Base Path
+        uses: actions/configure-pages@v5
+        with:
+          base_url: /${{ github.ref_name }}/ 
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
