@@ -1,38 +1,89 @@
 # .github/workflows/ci.yml
 
-name: CI, Security & Preview Deploy
+name: CI, Security & Deploy
 
 on:
   push:
-    branches: [ "**" ] # Run on every push to every branch
+    branches: [ "**" ] 
   pull_request:
-    branches: [ "main" ] # Also run on pull requests to main
+    branches: [ "main" ]
 
 jobs:
+  # The build-and-test job remains the same for all branches
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4 # UPDATED
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # UPDATED
         with:
-          node-version: '18' # Using a recent LTS version
-
+          node-version: '18'
       - name: Install dependencies
         run: npm install
-
       - name: Run tests
         run: npm test
-
       - name: Run security audit
         run: npm run security-check
 
-  deploy:
-    # This job only runs for branches that are NOT main.
-    # Assumes you have a separate deployment for the main branch.
+---
+  
+  # 🎯 JOB 1: PRODUCTION DEPLOYMENT (main branch)
+  deploy-main:
+    # This job only runs for the 'main' branch
+    if: github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages # Production environment
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # Standard build steps omitted for brevity (they would be here if not using artifacts)
+
+      # --- Steps 1 to 4: Build and Artifact Creation ---
+      # NOTE: These steps need to be repeated for the main branch if you are using
+      # the artifact method. I am assuming you ONLY need to deploy the artifact 
+      # created by the build-and-test job. If you need the full build steps, 
+      # they must be added here.
+      
+      # For simplicity, we assume the build artifact is passed or rebuilt here. 
+      # Using your previous steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm install
+      - name: Build project
+        run: npm run build 
+      
+      # 1. Configure Pages (No custom base path needed for root)
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # 2. Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist' 
+
+      # 3. Deploy to GitHub Pages (Production)
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+---
+
+  # 🎯 JOB 2: DEV PREVIEW DEPLOYMENT (dev and all other branches)
+  deploy-dev:
+    # Only run for branches that are NOT main
     if: github.ref != 'refs/heads/main'
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -41,32 +92,37 @@ jobs:
       id-token: write
 
     environment:
-      name: github-pages
+      name: dev-preview # Using a new environment name
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+      
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
-
       - name: Install dependencies
         run: npm install
-
       - name: Build project
-        run: npm run build # Assuming 'build' script creates a 'dist' directory
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5 # UPDATED
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3 # UPDATED
+        run: npm run build 
+      
+      # 1. CONFIGURE PAGES WITH BASE PATH (KEY FIX)
+      - name: Setup Pages with Base Path
+        uses: actions/configure-pages@v5
         with:
-          path: './dist' # Assuming build output is in 'dist'
+          # Sets the base URL to /repo-name/dev/
+          # We use github.ref_name which is 'dev' for the dev branch
+          base_url: /${{ github.ref_name }}/ 
 
+      # 2. Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      # 3. Deploy to GitHub Pages (Preview)
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 # UPDATED
+        uses: actions/deploy-pages@v4
