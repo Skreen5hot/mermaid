@@ -59,7 +59,14 @@ jobs:
 
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "📦 Deploying MAIN to root path"
-            npm run build
+
+            # Check if build script exists, otherwise build manually
+            if npm run | grep -q "build"; then
+              npm run build
+            else
+              echo "Build script not found, building manually..."
+              mkdir -p dist && cp -r index.html styles src dist/
+            fi
             cp -r dist/* _site/
           else
             echo "📦 Deploying DEV to /dev/ path"
@@ -68,13 +75,27 @@ jobs:
             git fetch origin main
             git checkout origin/main
             npm install
-            npm run build
+
+            # Check if build script exists on main, otherwise build manually
+            if npm run | grep -q "build"; then
+              npm run build
+            else
+              echo "Build script not found on main, building manually..."
+              mkdir -p dist && cp -r index.html styles src dist/
+            fi
             cp -r dist/* _site/
 
             # Build dev branch for /dev/ path
             git checkout -
             npm install
-            npm run build
+
+            # Check if build script exists on dev
+            if npm run | grep -q "build"; then
+              npm run build
+            else
+              echo "Build script not found on dev, building manually..."
+              mkdir -p dist && cp -r index.html styles src dist/
+            fi
             mkdir -p _site/dev
             cp -r dist/* _site/dev/
 
