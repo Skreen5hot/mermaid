@@ -100,8 +100,15 @@ jobs:
             cp -r dist/* _site/dev/
 
             # Add base tag to dev index.html for proper path resolution
+            # Extract repository name from GitHub context
+            REPO_NAME="${{ github.repository }}"
+            REPO_NAME="${REPO_NAME#*/}"  # Remove owner/ prefix
+            BASE_PATH="/${REPO_NAME}/dev/"
+
+            echo "📍 Setting base path to: ${BASE_PATH}"
+
             # Insert after the closing </title> tag
-            awk '/<\/title>/ {print; print "    <base href=\"/dev/\">"; next} 1' _site/dev/index.html > _site/dev/index.html.tmp
+            awk -v base="$BASE_PATH" '/<\/title>/ {print; print "    <base href=\"" base "\">"; next} 1' _site/dev/index.html > _site/dev/index.html.tmp
             mv _site/dev/index.html.tmp _site/dev/index.html
 
             echo "✅ Base tag added to dev index.html"
