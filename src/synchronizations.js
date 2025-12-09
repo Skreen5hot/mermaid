@@ -251,12 +251,16 @@ export const synchronizations = [
           gitAbstractionConcept.actions.setProvider(provider, adapter);
 
           // 2. Validate repository and get default branch
-          let owner, repo;
+          let owner, repo, host;
           try {
             // Pre-process to fix common URL typos like "https:" -> "https://"
             const correctedPath = repositoryPath.replace(/^(https?:)(?!\/\/)/, '$1//');
             // Handle full URLs by extracting the path
             const url = new URL(correctedPath);
+            host = url.host; // Extract the host (e.g., 'maestro.dhs.gov')
+            // Adjust for GitLab instances on a subpath (e.g., /gitlab/user/repo)
+            const pathSegments = url.pathname.substring(1).replace(/\.git$/, '').split('/');
+            const projectPathIndex = pathSegments.findIndex(segment => segment.toLowerCase() === 'gitlab') + 1;
             // e.g., /group/subgroup/project.git -> [group, subgroup, project]
             const pathParts = url.pathname.substring(1).replace(/\.git$/, '').split('/');
             owner = pathParts[0]; // The first part is the owner/group
@@ -269,11 +273,10 @@ export const synchronizations = [
           }
           if (!owner || !repo) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
           console.log('[Sync] Validating repository...');
-          // --- FIX: Pass the full canonical path for GitLab compatibility ---
-          // The gitlabAdapter expects the full 'owner/repo' string, which it will then URL-encode.
-          // The githubAdapter can correctly handle receiving the owner and repo separately.
+          // --- FIX: Pass the full canonical path and the detected host for self-hosted GitLab compatibility ---
           const canonicalPath = `${owner}/${repo}`;
-          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(canonicalPath, token);
+          // Pass host as part of an options object for future flexibility
+          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(canonicalPath, token, { host });
           const defaultBranch = repoInfo.default_branch;
           console.log(`[Sync] Repository validated. Default branch: ${defaultBranch}.`);
 
