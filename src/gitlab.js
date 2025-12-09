@@ -94,11 +94,9 @@ export const gitlabAdapter = {
 
   /**
    * Lists the contents of a given path in the repository.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
-   * @param {string} path - The directory path.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
    * @param {string} token - The user's PAT.
-   * @returns {Promise<any[]>} An array of file/directory objects.
+   * @param {string} path - The directory path.
    */
   async listContents(projectPath, token, path, options = {}) {
     const encodedProjectPath = encodeURIComponent(projectPath);
@@ -109,13 +107,11 @@ export const gitlabAdapter = {
 
   /**
    * Gets the content of a single file.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
-   * @param {string} path - The full file path.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
    * @param {string} token - The user's PAT.
+   * @param {string} path - The full file path.
    * @param {string} [ref] - An optional branch, tag, or SHA.
-   * @returns {Promise<{content: string, sha: string}>} Decoded content and file SHA.
-   */ // Note: The original `getContents` signature had `owner, repo, path, token, ref`. The `options` object is now the 5th parameter.
+   */
   async getContents(projectPath, token, path, ref, options = {}) {
     const encodedProjectPath = encodeURIComponent(projectPath);
     const filePath = encodeURIComponent(path);
@@ -132,11 +128,9 @@ export const gitlabAdapter = {
 
   /**
    * Gets the SHA of a directory tree.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
-   * @param {string} path - The directory path.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
    * @param {string} token - The user's PAT.
-   * @returns {Promise<string | null>} The SHA of the tree, or null if not found.
+   * @param {string} path - The directory path.
    */
   async getTreeSha(projectPath, token, path, options = {}) {
     // Use the same robust logic as the GitHub adapter: get the parent's contents
@@ -155,14 +149,12 @@ export const gitlabAdapter = {
 
   /**
    * Creates or updates a file.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
+   * @param {string} token - The user's PAT.
    * @param {string} path - The full file path.
    * @param {string} content - The new file content.
    * @param {string} message - The commit message.
    * @param {string | null} sha - The blob SHA. GitLab's simple API doesn't use this for updates, but we accept it for interface compatibility.
-   * @param {string} token - The user's PAT.
-   * @returns {Promise<any>}
    */
   async putContents(projectPath, token, path, content, message, sha, options = {}) {
     const encodedProjectPath = encodeURIComponent(projectPath);
@@ -189,13 +181,11 @@ export const gitlabAdapter = {
 
   /**
    * Deletes a file.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
+   * @param {string} token - The user's PAT.
    * @param {string} path - The full file path.
    * @param {string} message - The commit message.
    * @param {string} sha - The blob SHA. Not used by GitLab's simple API but kept for compatibility.
-   * @param {string} token - The user's PAT.
-   * @returns {Promise<any>}
    */
   async deleteContents(projectPath, token, path, message, sha, options = {}) {
     const encodedProjectPath = encodeURIComponent(projectPath);
@@ -212,11 +202,9 @@ export const gitlabAdapter = {
 
   /**
    * Gets the latest commit SHA for a given branch.
-   * @param {string} owner - The repository owner/group.
-   * @param {string} repo - The repository name.
-   * @param {string} branch - The branch name.
+   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
    * @param {string} token - The user's PAT.
-   * @returns {Promise<{sha: string}>} An object containing the commit SHA.
+   * @param {string} branch - The branch name.
    */
   async getLatestCommit(projectPath, token, branch, options = {}) {
     const encodedProjectPath = encodeURIComponent(projectPath);
