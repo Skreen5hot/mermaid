@@ -253,18 +253,27 @@ export const synchronizations = [
           // 2. Validate repository and get default branch
           let owner, repo;
           try {
+            // Pre-process to fix common URL typos like "https:" -> "https://"
+            const correctedPath = repositoryPath.replace(/^(https?:)(?!\/\/)/, '$1//');
             // Handle full URLs by extracting the path
-            const url = new URL(repositoryPath);
-            const pathParts = url.pathname.split('/').filter(p => p); // e.g., ['Skreen5hot', 'vanilla']
-            owner = pathParts[0];
-            repo = pathParts[1];
+            const url = new URL(correctedPath);
+            // e.g., /group/subgroup/project.git -> [group, subgroup, project]
+            const pathParts = url.pathname.substring(1).replace(/\.git$/, '').split('/');
+            owner = pathParts[0]; // The first part is the owner/group
+            repo = pathParts.slice(1).join('/'); // The rest is the repo name, allowing slashes in subgroups
           } catch (e) {
-            // Not a URL, assume it's already in owner/repo format
-            [owner, repo] = repositoryPath.split('/');
+            // Not a URL, assume it's in owner/repo or group/subgroup/repo format
+            const pathParts = repositoryPath.split('/');
+            owner = pathParts[0];
+            repo = pathParts.slice(1).join('/');
           }
           if (!owner || !repo) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
           console.log('[Sync] Validating repository...');
-          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(owner, repo, token);
+          // --- FIX: Pass the full canonical path for GitLab compatibility ---
+          // The gitlabAdapter expects the full 'owner/repo' string, which it will then URL-encode.
+          // The githubAdapter can correctly handle receiving the owner and repo separately.
+          const canonicalPath = `${owner}/${repo}`;
+          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(canonicalPath, token);
           const defaultBranch = repoInfo.default_branch;
           console.log(`[Sync] Repository validated. Default branch: ${defaultBranch}.`);
 
@@ -284,7 +293,7 @@ export const synchronizations = [
           newProject = {
             name: name || repositoryPath, // Use provided name, or repositoryPath as default
             gitProvider,
-            repositoryPath: `${owner}/${repo}`, // Store the canonical owner/repo path
+            repositoryPath: canonicalPath, // Store the canonical owner/repo path
             defaultBranch,
             lastSyncSha: null,
             encryptedToken, // This is an object: { ciphertext, salt, iv }
