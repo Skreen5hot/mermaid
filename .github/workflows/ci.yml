@@ -4,7 +4,7 @@ name: CI, Security & Deploy
 
 on:
   push:
-    branches: [ "**" ] 
+    branches: [ "main", "dev" ]
   pull_request:
     branches: [ "main" ]
 
@@ -25,92 +25,110 @@ jobs:
       - name: Run security audit
         run: npm run security-check
 
----
-  
-  # 🎯 JOB 1: PRODUCTION DEPLOYMENT (main branch)
-  deploy-main:
-    # ✅ Runs only on main
-    if: github.ref == 'refs/heads/main'
+  # 🎯 UNIFIED DEPLOYMENT JOB
+  # Deploys main to root (/) and dev to /dev/ subdirectory
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     needs: build-and-test
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
+      contents: read
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      # --- Deployment Steps for Root Path ---
       - name: Checkout repository
         uses: actions/checkout@v3
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+
       - name: Install dependencies
         run: npm install
-      - name: Build project
-        run: npm run build 
+
+      # Prepare combined deployment directory
+      - name: Prepare deployment structure
+        run: |
+          mkdir -p _site
+
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "📦 Deploying MAIN to root path"
+            npm run build
+            cp -r dist/* _site/
+          else
+            echo "📦 Deploying DEV to /dev/ path"
+
+            # Build main branch for root path
+            git fetch origin main
+            git checkout origin/main
+            npm install
+            npm run build
+            cp -r dist/* _site/
+
+            # Build dev branch for /dev/ path
+            git checkout -
+            npm install
+            npm run build
+            mkdir -p _site/dev
+            cp -r dist/* _site/dev/
+
+            # Add base tag to dev index.html for proper path resolution
+            sed -i 's|<head>|<head>\n    <base href="/dev/">|' _site/dev/index.html
+          fi
+
+          # Create environments index for easy navigation
+          cat > _site/environments.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Available Environments</title>
+            <style>
+              body { font-family: system-ui; max-width: 600px; margin: 100px auto; padding: 20px; }
+              h1 { color: #333; }
+              ul { list-style: none; padding: 0; }
+              li { margin: 15px 0; }
+              a { display: block; padding: 15px; background: #f5f5f5; border-radius: 8px; text-decoration: none; color: #0066cc; transition: background 0.2s; }
+              a:hover { background: #e0e0e0; }
+              .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px; }
+              .prod { background: #28a745; color: white; }
+              .dev { background: #ffc107; color: #333; }
+            </style>
+          </head>
+          <body>
+            <h1>🌐 Mermaid IDE Environments</h1>
+            <ul>
+              <li>
+                <a href="/">
+                  <strong>Production</strong> <span class="badge prod">MAIN</span>
+                  <br><small>Stable version from main branch</small>
+                </a>
+              </li>
+              <li>
+                <a href="/dev/">
+                  <strong>Development</strong> <span class="badge dev">DEV</span>
+                  <br><small>Preview of latest dev branch features</small>
+                </a>
+              </li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './dist' 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
----
-
-  # 🎯 JOB 2: DEV PREVIEW DEPLOYMENT (dev branch)
-  deploy-dev:
-    # 💡 TRICK: Forces the job to appear in the UI even if the upstream job succeeded.
-    # This helps diagnose the conditional failure.
-    if: success() || failure()
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-
-    environment:
-      name: dev-preview # Unique environment name for separate URL
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      # 1. CONDITIONAL CHECK (The actual gate)
-      - name: Check Branch is DEV
-        # ❌ FAIL IF NOT DEV: This is a custom script that fails the job if it's not 'dev'.
-        if: github.ref != 'refs/heads/dev'
-        run: |
-          echo "Branch is not 'dev' (${{ github.ref_name }}). Skipping deployment."
-          exit 1
-        
-      # 2. PROCEED TO DEPLOYMENT (Only runs if the above step didn't fail)
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - name: Install dependencies
-        run: npm install
-      - name: Build project
-        run: npm run build 
-      
-      # 3. CONFIGURE PAGES WITH BASE PATH
-      - name: Setup Pages with Base Path
-        uses: actions/configure-pages@v5
-        with:
-          base_url: /${{ github.ref_name }}/ 
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
