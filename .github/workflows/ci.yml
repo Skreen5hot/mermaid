@@ -100,7 +100,12 @@ jobs:
             cp -r dist/* _site/dev/
 
             # Add base tag to dev index.html for proper path resolution
-            sed -i 's|<head>|<head>\n    <base href="/dev/">|' _site/dev/index.html
+            # Insert after the closing </title> tag
+            awk '/<\/title>/ {print; print "    <base href=\"/dev/\">"; next} 1' _site/dev/index.html > _site/dev/index.html.tmp
+            mv _site/dev/index.html.tmp _site/dev/index.html
+
+            echo "✅ Base tag added to dev index.html"
+            grep -A 1 "</title>" _site/dev/index.html | head -2
           fi
 
           # Create environments index for easy navigation
