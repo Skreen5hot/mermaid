@@ -179,9 +179,11 @@ export const gitlabAdapter = {
     const method = sha ? 'PUT' : 'POST';
 
     return _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}`, token, {
+      ...options, // Pass through apiBaseUrl and other top-level options
       method,
-      ...options, // Merge any additional options
-      body: JSON.stringify(body),
+      // The body for the fetch call should only contain the GitLab-specific payload.
+      // Do not spread `options` into the body.
+      body,
     });
   },
 
@@ -203,8 +205,8 @@ export const gitlabAdapter = {
     const body = { branch: default_branch, commit_message: message };
     return _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}`, token, {
       method: 'DELETE',
-      ...options, // Merge any additional options
-      body: JSON.stringify(body),
+      ...options, // Pass through apiBaseUrl
+      body,
     });
   },
 

@@ -296,6 +296,7 @@ export const synchronizations = [
           newProject = {
             name: name || repositoryPath, // Use provided name, or repositoryPath as default
             gitProvider,
+            apiBaseUrl, // --- FIX: Store the detected API base URL ---
             repositoryPath: projectPath, // Store the canonical owner/repo path
             defaultBranch,
             lastSyncSha: null,
