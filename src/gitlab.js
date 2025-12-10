@@ -107,7 +107,17 @@ export const gitlabAdapter = {
     const encodedProjectPath = encodeURIComponent(projectPath);
     // Note: GitLab's `tree` endpoint doesn't return SHAs for files directly.
     // It returns a `blob_id`. We will map this to `sha` for compatibility.
-    return _gitlabFetch(`projects/${encodedProjectPath}/repository/tree?path=${path}`, token, options);
+    const items = await _gitlabFetch(`projects/${encodedProjectPath}/repository/tree?path=${path}`, token, options);
+
+    // Normalize GitLab response to match GitHub structure
+    // GitLab returns: { id, name, type, path, mode }
+    // GitHub returns: { name, path, sha, type }
+    return items.map(item => ({
+      name: item.name,
+      path: item.path,
+      sha: item.id, // GitLab uses 'id' for blob/tree SHA
+      type: item.type === 'blob' ? 'file' : item.type === 'tree' ? 'dir' : item.type
+    }));
   },
 
   /**
@@ -182,13 +192,36 @@ export const gitlabAdapter = {
     // GitLab uses POST for create and PUT for update.
     const method = sha ? 'PUT' : 'POST';
 
-    return _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}`, token, {
+    const response = await _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}`, token, {
       ...options, // Pass through apiBaseUrl and other top-level options
       method,
       // The body for the fetch call should only contain the GitLab-specific payload.
       // Do not spread `options` into the body.
       body,
     });
+
+    // Normalize response to match GitHub's structure: { content: { sha: ... } }
+    // GitLab returns { file_path, branch } directly, so we need to fetch the file to get the blob_id
+    // For now, return a structure compatible with GitHub
+    return {
+      content: {
+        sha: response.file_path ? await this._getFileSha(owner, repo, path, token, options) : null
+      }
+    };
+  },
+
+  /**
+   * Helper to get the current SHA of a file after creation/update.
+   * @private
+   */
+  async _getFileSha(owner, repo, path, token, options) {
+    try {
+      const file = await this.getContents(owner, repo, path, token, options);
+      return file.sha;
+    } catch (error) {
+      console.warn('[GitLab Adapter] Could not fetch file SHA after put:', error);
+      return null;
+    }
   },
 
   /**
