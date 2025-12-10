@@ -128,6 +128,15 @@ export const syncService = {
         // Prepare options for git adapter calls (includes apiBaseUrl for self-hosted GitLab)
         const gitOptions = project.apiBaseUrl ? { apiBaseUrl: project.apiBaseUrl } : {};
 
+        // --- DEBUG: Log the Git API configuration ---
+        console.log('[SyncService] ===== GIT API CONFIGURATION =====');
+        console.log('[SyncService] Git Provider:', project.gitProvider);
+        console.log('[SyncService] Repository:', `${owner}/${repo}`);
+        console.log('[SyncService] Branch:', project.defaultBranch);
+        console.log('[SyncService] API Base URL:', project.apiBaseUrl || '(not set - will use default)');
+        console.log('[SyncService] gitOptions object:', JSON.stringify(gitOptions, null, 2));
+        console.log('[SyncService] ========================================');
+
         // 1. Get the latest commit SHA and check if a pull is needed
         const remoteCommit = await gitAbstractionConcept.actions.getLatestCommit(owner, repo, project.defaultBranch, token, gitOptions);
         const remoteSha = remoteCommit.sha;
