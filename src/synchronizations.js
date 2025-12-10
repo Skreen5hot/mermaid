@@ -258,20 +258,41 @@ export const synchronizations = [
             // Handle full URLs by extracting the path
             const url = new URL(correctedPath);
 
-            // Find where the project path begins (e.g., after '/gitlab/')
-            const pathSegments = url.pathname.substring(1).replace(/\.git$/, '').split('/'); // e.g., ['gitlab', 'AARON.A.DAMIANO', 'ccv-tool']
-            // A simple heuristic: find the user/group segment. This is brittle but works for the user's case.
-            // A more robust solution would require a dedicated field for the API base URL in the UI.
-            const projectPathStartIndex = pathSegments.findIndex(seg => seg.toLowerCase() === 'aaron.a.damiano'); // Heuristic
+            // --- IMPROVED: Better URL parsing for self-hosted GitLab ---
+            // For a URL like: https://maestro.dhs.gov/gitlab/AARON.A.DAMIANO/ccv-tool
+            // We need to extract:
+            //   - apiBaseUrl: https://maestro.dhs.gov/gitlab
+            //   - projectPath: AARON.A.DAMIANO/ccv-tool
+            //
+            // GitLab project paths are always in the format: owner/repo (2 segments)
+            // Everything before that is part of the API base URL path
 
-            projectPath = pathSegments.slice(projectPathStartIndex).join('/'); // 'AARON.A.DAMIANO/ccv-tool'
-            const apiSubPath = pathSegments.slice(0, projectPathStartIndex).join('/'); // 'gitlab'
-            apiBaseUrl = `${url.protocol}//${url.host}/${apiSubPath}`; // 'https://maestro.dhs.gov/gitlab'
+            const pathSegments = url.pathname.substring(1).replace(/\.git$/, '').split('/').filter(s => s.length > 0);
+            console.log('[Sync] Parsing URL - Path segments:', pathSegments);
+
+            // Assume the last 2 segments are owner/repo (e.g., ['AARON.A.DAMIANO', 'ccv-tool'])
+            if (pathSegments.length >= 2) {
+              projectPath = pathSegments.slice(-2).join('/');
+              const apiPathPrefix = pathSegments.slice(0, -2).join('/');
+
+              // Construct the API base URL
+              if (apiPathPrefix) {
+                apiBaseUrl = `${url.protocol}//${url.host}/${apiPathPrefix}`;
+              } else {
+                // No prefix (e.g., https://gitlab.com/owner/repo)
+                apiBaseUrl = `${url.protocol}//${url.host}`;
+              }
+
+              console.log('[Sync] Extracted from URL - Project Path:', projectPath, '| API Base URL:', apiBaseUrl);
+            } else {
+              throw new Error('URL must contain at least owner/repo');
+            }
 
           } catch (e) {
-            // Not a URL, assume it's in 'owner/repo' format for gitlab.com
+            // Not a URL, assume it's in 'owner/repo' format for gitlab.com or github.com
+            console.log('[Sync] Not a URL, treating as owner/repo format:', repositoryPath);
             projectPath = repositoryPath;
-            apiBaseUrl = null; // Let the adapter use its default (gitlab.com)
+            apiBaseUrl = null; // Let the adapter use its default
           }
           if (!projectPath) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
           console.log('[Sync] Validating repository...');
