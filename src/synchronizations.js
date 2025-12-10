@@ -275,15 +275,25 @@ export const synchronizations = [
               projectPath = pathSegments.slice(-2).join('/');
               const apiPathPrefix = pathSegments.slice(0, -2).join('/');
 
-              // Construct the API base URL
-              if (apiPathPrefix) {
-                apiBaseUrl = `${url.protocol}//${url.host}/${apiPathPrefix}`;
+              // Special case: public github.com and gitlab.com should use default API URLs
+              const isPublicGitHub = url.host === 'github.com' && !apiPathPrefix;
+              const isPublicGitLab = url.host === 'gitlab.com' && !apiPathPrefix;
+
+              if (isPublicGitHub || isPublicGitLab) {
+                // For public GitHub/GitLab, don't set apiBaseUrl (use defaults)
+                apiBaseUrl = null;
+                console.log('[Sync] Detected public', isPublicGitHub ? 'GitHub' : 'GitLab', '- using default API URL');
               } else {
-                // No prefix (e.g., https://gitlab.com/owner/repo)
-                apiBaseUrl = `${url.protocol}//${url.host}`;
+                // Construct the API base URL for self-hosted instances
+                if (apiPathPrefix) {
+                  apiBaseUrl = `${url.protocol}//${url.host}/${apiPathPrefix}`;
+                } else {
+                  // No prefix but not public (e.g., https://github.company.com/owner/repo)
+                  apiBaseUrl = `${url.protocol}//${url.host}`;
+                }
               }
 
-              console.log('[Sync] Extracted from URL - Project Path:', projectPath, '| API Base URL:', apiBaseUrl);
+              console.log('[Sync] Extracted from URL - Project Path:', projectPath, '| API Base URL:', apiBaseUrl || '(using default)');
             } else {
               throw new Error('URL must contain at least owner/repo');
             }
