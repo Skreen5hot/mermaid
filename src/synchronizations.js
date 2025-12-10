@@ -296,8 +296,9 @@ export const synchronizations = [
           }
           if (!projectPath) throw new Error('Invalid repository path format. Must be "owner/repo" or a full URL.');
           console.log('[Sync] Validating repository...');
-          // --- FIX: Pass the full project path and the detected apiBaseUrl for self-hosted GitLab compatibility ---
-          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(projectPath, token, { apiBaseUrl });
+          // --- FIX: Split projectPath into owner/repo and pass apiBaseUrl for self-hosted GitLab compatibility ---
+          const [owner, repo] = projectPath.split('/');
+          const repoInfo = await gitAbstractionConcept.actions.getRepoInfo(owner, repo, token, { apiBaseUrl });
           const defaultBranch = repoInfo.default_branch;
           console.log(`[Sync] Repository validated. Default branch: ${defaultBranch}.`);
 

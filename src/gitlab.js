@@ -82,23 +82,28 @@ async function _gitlabFetch(path, token, options = {}, retries = 3, backoff = 10
 export const gitlabAdapter = {
   /**
    * Gets repository information, primarily to find the default branch.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} token - The user's PAT.
    * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    * @returns {Promise<{default_branch: string}>}
    */
-  getRepoInfo(projectPath, token, options = {}) {
+  getRepoInfo(owner, repo, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     return _gitlabFetch(`projects/${encodedProjectPath}`, token, options);
   },
 
   /**
    * Lists the contents of a given path in the repository.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} path - The directory path.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async listContents(projectPath, token, path, options = {}) {
+  async listContents(owner, repo, path, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     // Note: GitLab's `tree` endpoint doesn't return SHAs for files directly.
     // It returns a `blob_id`. We will map this to `sha` for compatibility.
@@ -107,17 +112,19 @@ export const gitlabAdapter = {
 
   /**
    * Gets the content of a single file.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} path - The full file path.
-   * @param {string} [ref] - An optional branch, tag, or SHA.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async getContents(projectPath, token, path, ref, options = {}) {
+  async getContents(owner, repo, path, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     const filePath = encodeURIComponent(path);
     // Pass options to getRepoInfo as well, so it uses the correct base URL
-    const refToUse = ref || (await this.getRepoInfo(projectPath, token, options)).default_branch;
-    
+    const refToUse = (await this.getRepoInfo(owner, repo, token, options)).default_branch;
+
     const response = await _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}?ref=${refToUse}`, token, options);
     // GitLab API returns content base64 encoded. `blob_id` is the SHA.
     return {
@@ -128,16 +135,18 @@ export const gitlabAdapter = {
 
   /**
    * Gets the SHA of a directory tree.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} path - The directory path.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async getTreeSha(projectPath, token, path, options = {}) {
+  async getTreeSha(owner, repo, path, token, options = {}) {
     // Use the same robust logic as the GitHub adapter: get the parent's contents
     // and find the target directory's SHA within that list.
     const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
     try { // Pass options to listContents
-      const parentContents = await this.listContents(projectPath, token, parentPath, options);
+      const parentContents = await this.listContents(owner, repo, parentPath, token, options);
       // GitLab uses 'tree' for directories.
       const pathEntry = parentContents.find(entry => entry.path === path && entry.type === 'tree');
       return pathEntry ? pathEntry.id : null; // GitLab uses 'id' for the SHA
@@ -149,18 +158,21 @@ export const gitlabAdapter = {
 
   /**
    * Creates or updates a file.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} path - The full file path.
    * @param {string} content - The new file content.
    * @param {string} message - The commit message.
    * @param {string | null} sha - The blob SHA. GitLab's simple API doesn't use this for updates, but we accept it for interface compatibility.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async putContents(projectPath, token, path, content, message, sha, options = {}) {
+  async putContents(owner, repo, path, content, message, sha, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     const filePath = encodeURIComponent(path);
     // Pass options to getRepoInfo as well, so it uses the correct base URL
-    const { default_branch } = await this.getRepoInfo(projectPath, token, options);
+    const { default_branch } = await this.getRepoInfo(owner, repo, token, options);
     const body = {
       branch: default_branch,
       content: unicodeBtoa(content),
@@ -181,17 +193,20 @@ export const gitlabAdapter = {
 
   /**
    * Deletes a file.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} path - The full file path.
    * @param {string} message - The commit message.
    * @param {string} sha - The blob SHA. Not used by GitLab's simple API but kept for compatibility.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async deleteContents(projectPath, token, path, message, sha, options = {}) {
+  async deleteContents(owner, repo, path, message, sha, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     const filePath = encodeURIComponent(path);
     // Pass options to getRepoInfo as well, so it uses the correct base URL
-    const { default_branch } = await this.getRepoInfo(projectPath, token, options);
+    const { default_branch } = await this.getRepoInfo(owner, repo, token, options);
     const body = { branch: default_branch, commit_message: message };
     return _gitlabFetch(`projects/${encodedProjectPath}/repository/files/${filePath}`, token, {
       method: 'DELETE',
@@ -202,11 +217,14 @@ export const gitlabAdapter = {
 
   /**
    * Gets the latest commit SHA for a given branch.
-   * @param {string} projectPath - The full project path (e.g., 'group/subgroup/project').
-   * @param {string} token - The user's PAT.
+   * @param {string} owner - The repository owner/group.
+   * @param {string} repo - The repository name.
    * @param {string} branch - The branch name.
+   * @param {string} token - The user's PAT.
+   * @param {object} [options={}] - Options, including apiBaseUrl for self-hosted instances.
    */
-  async getLatestCommit(projectPath, token, branch, options = {}) {
+  async getLatestCommit(owner, repo, branch, token, options = {}) {
+    const projectPath = `${owner}/${repo}`;
     const encodedProjectPath = encodeURIComponent(projectPath);
     // Pass options to _gitlabFetch
     const branchInfo = await _gitlabFetch(`projects/${encodedProjectPath}/repository/branches/${branch}`, token, options);
