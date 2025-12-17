@@ -3,7 +3,10 @@
     "allow": [
       "Bash(find:*)",
       "Bash(git mv:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(npm install)"
     ]
   }
 }

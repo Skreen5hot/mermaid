@@ -1,0 +1,41 @@
+{
+  "name": "@agentic/ui-test-framework",
+  "version": "1.0.0",
+  "description": "Lightweight UI testing framework optimized for AI agent interaction with deterministic behavior and structured logging",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js",
+    "test:watch": "node --test --watch tests/**/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/**/*.test.js"
+  },
+  "keywords": [
+    "testing",
+    "ui-testing",
+    "browser-automation",
+    "agentic",
+    "cdp",
+    "chromium",
+    "concepts-synchronizations"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "chrome-remote-interface": "^0.33.0"
+  },
+  "peerDependenciesMeta": {
+    "chrome-remote-interface": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {}
+}
