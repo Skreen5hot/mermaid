@@ -1,0 +1,95 @@
+image: node:20
+
+stages:
+  - test
+  - deploy
+
+cache:
+  paths:
+    - node_modules/
+
+before_script:
+  - npm ci
+
+# Test on different Node.js versions
+test:node-18:
+  image: node:18
+  stage: test
+  before_script:
+    - apt-get update
+    - apt-get install -y wget gnupg
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+    - sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+    - apt-get update
+    - apt-get install -y google-chrome-stable
+    - npm ci
+  script:
+    - npm test
+    - node test-dom.js
+    - node test-context.js
+    - node test-wait.js
+    - node test-assertion.js
+    - node test-runner.js
+    - node test-report.js
+
+test:node-20:
+  image: node:20
+  stage: test
+  before_script:
+    - apt-get update
+    - apt-get install -y wget gnupg
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+    - sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+    - apt-get update
+    - apt-get install -y google-chrome-stable
+    - npm ci
+  script:
+    - npm test
+    - node test-dom.js
+    - node test-context.js
+    - node test-wait.js
+    - node test-assertion.js
+    - node test-runner.js
+    - node test-report.js
+
+test:node-22:
+  image: node:22
+  stage: test
+  before_script:
+    - apt-get update
+    - apt-get install -y wget gnupg
+    - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+    - sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+    - apt-get update
+    - apt-get install -y google-chrome-stable
+    - npm ci
+  script:
+    - npm test
+    - node test-dom.js
+    - node test-context.js
+    - node test-wait.js
+    - node test-assertion.js
+    - node test-runner.js
+    - node test-report.js
+
+# Code quality checks
+lint:
+  stage: test
+  script:
+    - echo "Running code quality checks..."
+    - npm test
+  allow_failure: true
+
+# Deploy to npm registry (manual trigger)
+publish:npm:
+  stage: deploy
+  only:
+    - main
+  when: manual
+  before_script:
+    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    - npm ci
+  script:
+    - npm publish --access public
+  after_script:
+    - rm -f .npmrc

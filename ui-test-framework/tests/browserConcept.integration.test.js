@@ -12,13 +12,37 @@ import { browserConcept } from '../src/concepts/browserConcept.js';
 
 // Get Chrome path from environment or use common defaults
 const CHROME_PATH = process.env.CHROME_PATH ||
-  process.platform === 'win32'
+  (process.platform === 'win32'
     ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
     : process.platform === 'darwin'
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-    : '/usr/bin/chromium';
+    : '/usr/bin/google-chrome-stable');
 
-test('browser lifecycle - launch and close', async () => {
+// Helper to ensure clean state before each test
+async function ensureCleanState() {
+  try {
+    await browserConcept.actions.close();
+  } catch (err) {
+    // Ignore errors
+  }
+
+  // Reset state manually to be extra sure
+  browserConcept.state.browser = null;
+  browserConcept.state.wsEndpoint = null;
+  browserConcept.state.ws = null;
+  browserConcept.state.process = null;
+  browserConcept.state.cdpPort = null;
+  browserConcept.state.isClosing = false;
+  browserConcept.state.pendingMessages.clear();
+  browserConcept.state.sessions.clear();
+
+  // Wait longer for cleanup - Chrome needs time to fully terminate
+  await new Promise(resolve => setTimeout(resolve, 500));
+}
+
+test('browser lifecycle - launch and close', async (t) => {
+  await ensureCleanState();
+
   const browser = await browserConcept.actions.launch({
     executablePath: CHROME_PATH,
     headless: true,
@@ -47,30 +71,34 @@ test('browser lifecycle - launch and close', async () => {
   assert.strictEqual(browserConcept.state.ws, null, 'WebSocket should be null');
 });
 
-test('browser emits browserLaunched event', async () => {
-  const events = [];
+test('browser emits browserLaunched event', async (t) => {
+  await ensureCleanState();
 
-  browserConcept.subscribe((event, payload) => {
+  const events = [];
+  const unsubscribe = browserConcept.subscribe((event, payload) => {
     events.push({ event, payload });
   });
 
-  await browserConcept.actions.launch({
-    executablePath: CHROME_PATH,
-    headless: true
-  });
+  try {
+    await browserConcept.actions.launch({
+      executablePath: CHROME_PATH,
+      headless: true
+    });
 
-  // Check for browserLaunched event
-  const launchEvent = events.find(e => e.event === 'browserLaunched');
-  assert.ok(launchEvent, 'browserLaunched event should be emitted');
-  assert.ok(launchEvent.payload.wsEndpoint, 'Event should include wsEndpoint');
-  assert.ok(launchEvent.payload.pid, 'Event should include pid');
-
-  await browserConcept.actions.close();
+    // Check for browserLaunched event
+    const launchEvent = events.find(e => e.event === 'browserLaunched');
+    assert.ok(launchEvent, 'browserLaunched event should be emitted');
+    assert.ok(launchEvent.payload.wsEndpoint, 'Event should include wsEndpoint');
+    assert.ok(launchEvent.payload.pid, 'Event should include pid');
+  } finally {
+    await browserConcept.actions.close();
+  }
 });
 
-test('browser emits browserClosed event', async () => {
-  const events = [];
+test('browser emits browserClosed event', async (t) => {
+  await ensureCleanState();
 
+  const events = [];
   browserConcept.subscribe((event, payload) => {
     events.push({ event, payload });
   });
@@ -87,23 +115,29 @@ test('browser emits browserClosed event', async () => {
   assert.ok(closeEvent, 'browserClosed event should be emitted');
 });
 
-test('sendCDPCommand works correctly', async () => {
-  await browserConcept.actions.launch({
-    executablePath: CHROME_PATH,
-    headless: true
-  });
+test('sendCDPCommand works correctly', async (t) => {
+  await ensureCleanState();
 
-  // Send a simple CDP command to get browser version
-  const result = await browserConcept.actions.sendCDPCommand('Browser.getVersion');
+  try {
+    await browserConcept.actions.launch({
+      executablePath: CHROME_PATH,
+      headless: true
+    });
 
-  assert.ok(result, 'CDP command should return result');
-  assert.ok(result.product, 'Result should include product info');
-  assert.ok(result.userAgent, 'Result should include user agent');
+    // Send a simple CDP command to get browser version
+    const result = await browserConcept.actions.sendCDPCommand('Browser.getVersion');
 
-  await browserConcept.actions.close();
+    assert.ok(result, 'CDP command should return result');
+    assert.ok(result.product, 'Result should include product info');
+    assert.ok(result.userAgent, 'Result should include user agent');
+  } finally {
+    await browserConcept.actions.close();
+  }
 });
 
-test('sendCDPCommand throws when not connected', async () => {
+test('sendCDPCommand throws when not connected', async (t) => {
+  await ensureCleanState();
+
   // Try to send command without launching browser
   await assert.rejects(
     async () => {
@@ -114,7 +148,9 @@ test('sendCDPCommand throws when not connected', async () => {
   );
 });
 
-test('close is idempotent', async () => {
+test('close is idempotent', async (t) => {
+  await ensureCleanState();
+
   await browserConcept.actions.launch({
     executablePath: CHROME_PATH,
     headless: true
@@ -129,39 +165,37 @@ test('close is idempotent', async () => {
   assert.strictEqual(browserConcept.state.browser, null);
 });
 
-test('browser handles custom viewport size', async () => {
-  await browserConcept.actions.launch({
-    executablePath: CHROME_PATH,
-    headless: true,
-    viewport: { width: 1920, height: 1080 }
-  });
+test('browser handles custom viewport size', async (t) => {
+  await ensureCleanState();
 
-  assert.ok(browserConcept.state.browser, 'Browser should launch with custom viewport');
-
-  await browserConcept.actions.close();
-});
-
-test('getWSEndpoint returns correct endpoint', async () => {
-  await browserConcept.actions.launch({
-    executablePath: CHROME_PATH,
-    headless: true
-  });
-
-  const endpoint = browserConcept.actions.getWSEndpoint();
-
-  assert.ok(endpoint, 'Endpoint should be returned');
-  assert.ok(endpoint.startsWith('ws://'), 'Endpoint should be WebSocket URL');
-  assert.ok(endpoint.includes('devtools'), 'Endpoint should be CDP URL');
-
-  await browserConcept.actions.close();
-});
-
-// Cleanup after all tests
-test.afterEach(async () => {
-  // Ensure browser is closed after each test
   try {
+    await browserConcept.actions.launch({
+      executablePath: CHROME_PATH,
+      headless: true,
+      viewport: { width: 1920, height: 1080 }
+    });
+
+    assert.ok(browserConcept.state.browser, 'Browser should launch with custom viewport');
+  } finally {
     await browserConcept.actions.close();
-  } catch (err) {
-    // Ignore - browser may already be closed
+  }
+});
+
+test('getWSEndpoint returns correct endpoint', async (t) => {
+  await ensureCleanState();
+
+  try {
+    await browserConcept.actions.launch({
+      executablePath: CHROME_PATH,
+      headless: true
+    });
+
+    const endpoint = browserConcept.actions.getWSEndpoint();
+
+    assert.ok(endpoint, 'Endpoint should be returned');
+    assert.ok(endpoint.startsWith('ws://'), 'Endpoint should be WebSocket URL');
+    assert.ok(endpoint.includes('devtools'), 'Endpoint should be CDP URL');
+  } finally {
+    await browserConcept.actions.close();
   }
 });
