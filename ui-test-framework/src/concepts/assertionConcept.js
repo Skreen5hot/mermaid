@@ -6,6 +6,7 @@
  */
 
 import { AssertionError } from '../errors/index.js';
+import { domConcept } from './domConcept.js';
 
 export const assertionConcept = {
   state: {
@@ -19,7 +20,7 @@ export const assertionConcept = {
      * @returns {Object} Fluent assertion API
      */
     expect(actual) {
-      const self = this;
+      const self = assertionConcept;
 
       return {
         toBe(expected) {
@@ -52,14 +53,54 @@ export const assertionConcept = {
           self.notify('assertionPassed', { expected: substring, actual, matcher: 'toContain' });
         },
 
-        toExist() {
-          // This will be implemented to work with DOM selectors
-          throw new Error('Not implemented - requires DOM integration');
+        async toExist() {
+          // For DOM selector assertions
+          if (typeof actual !== 'string') {
+            throw new AssertionError({
+              expected: 'CSS selector string',
+              actual: typeof actual,
+              matcher: 'toExist',
+              diff: 'toExist() requires a CSS selector string'
+            });
+          }
+
+          const exists = await domConcept.actions.exists(actual);
+          if (!exists) {
+            const error = new AssertionError({
+              expected: `Element "${actual}" to exist`,
+              actual: 'Element not found',
+              matcher: 'toExist',
+              selector: actual
+            });
+            self.notify('assertionFailed', error);
+            throw error;
+          }
+          self.notify('assertionPassed', { expected: 'exists', actual, matcher: 'toExist' });
         },
 
-        toBeVisible() {
-          // This will be implemented to work with DOM selectors
-          throw new Error('Not implemented - requires DOM integration');
+        async toBeVisible() {
+          // For DOM selector assertions
+          if (typeof actual !== 'string') {
+            throw new AssertionError({
+              expected: 'CSS selector string',
+              actual: typeof actual,
+              matcher: 'toBeVisible',
+              diff: 'toBeVisible() requires a CSS selector string'
+            });
+          }
+
+          const visible = await domConcept.actions.isVisible(actual);
+          if (!visible) {
+            const error = new AssertionError({
+              expected: `Element "${actual}" to be visible`,
+              actual: 'Element is not visible or does not exist',
+              matcher: 'toBeVisible',
+              selector: actual
+            });
+            self.notify('assertionFailed', error);
+            throw error;
+          }
+          self.notify('assertionPassed', { expected: 'visible', actual, matcher: 'toBeVisible' });
         },
 
         toBeTruthy() {

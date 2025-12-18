@@ -6,7 +6,12 @@
       "Bash(npm test:*)",
       "Bash(mkdir:*)",
       "Bash(tree:*)",
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(timeout 45 node:*)",
+      "Bash(node:*)",
+      "Bash(timeout 60 node:*)",
+      "Bash(ls:*)",
+      "Bash(timeout 30 node:*)"
     ]
   }
 }

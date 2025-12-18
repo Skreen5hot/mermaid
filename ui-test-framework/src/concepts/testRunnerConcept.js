@@ -7,18 +7,22 @@
  * FR-32: Test Isolation
  */
 
+import { contextConcept } from './contextConcept.js';
+import { browserConcept } from './browserConcept.js';
+
 export const testRunnerConcept = {
   state: {
     suites: [],              // Test suite registry
     currentSuite: null,
     currentTest: null,
-    hooks: {
+    globalHooks: {
       beforeAll: [],
       afterAll: [],
       beforeEach: [],
       afterEach: []
     },
-    results: []
+    results: [],
+    isRunning: false
   },
 
   actions: {
@@ -28,11 +32,39 @@ export const testRunnerConcept = {
      * @param {Function} fn - Suite definition function
      */
     describe(name, fn) {
-      // TODO: Implement describe logic
+      const self = testRunnerConcept;
+
       // 1. Create suite object
-      // 2. Execute fn to collect tests and hooks
-      // 3. Add to suites registry
-      throw new Error('Not implemented');
+      const suite = {
+        name,
+        tests: [],
+        hooks: {
+          beforeAll: [],
+          afterAll: [],
+          beforeEach: [],
+          afterEach: []
+        },
+        fn
+      };
+
+      // 2. Set as current suite so tests can be added to it
+      const previousSuite = self.state.currentSuite;
+      self.state.currentSuite = suite;
+
+      // 3. Execute fn to collect tests and hooks
+      try {
+        fn();
+      } finally {
+        self.state.currentSuite = previousSuite;
+      }
+
+      // 4. Add to suites registry
+      self.state.suites.push(suite);
+
+      self.notify('suiteRegistered', {
+        name,
+        testCount: suite.tests.length
+      });
     },
 
     /**
@@ -41,10 +73,34 @@ export const testRunnerConcept = {
      * @param {Function} fn - Test function
      */
     test(name, fn) {
-      // TODO: Implement test logic
+      const self = testRunnerConcept;
+
       // 1. Create test object
+      const test = {
+        name,
+        fn,
+        suite: self.state.currentSuite?.name || 'default'
+      };
+
       // 2. Add to current suite
-      throw new Error('Not implemented');
+      if (self.state.currentSuite) {
+        self.state.currentSuite.tests.push(test);
+      } else {
+        // If no suite is active, create a default suite
+        if (self.state.suites.length === 0 || self.state.suites[0].name !== 'default') {
+          self.state.suites.unshift({
+            name: 'default',
+            tests: [],
+            hooks: {
+              beforeAll: [],
+              afterAll: [],
+              beforeEach: [],
+              afterEach: []
+            }
+          });
+        }
+        self.state.suites[0].tests.push(test);
+      }
     },
 
     /**
@@ -52,7 +108,13 @@ export const testRunnerConcept = {
      * @param {Function} fn - Hook function
      */
     beforeAll(fn) {
-      this.state.hooks.beforeAll.push(fn);
+      const self = testRunnerConcept;
+
+      if (self.state.currentSuite) {
+        self.state.currentSuite.hooks.beforeAll.push(fn);
+      } else {
+        self.state.globalHooks.beforeAll.push(fn);
+      }
     },
 
     /**
@@ -60,7 +122,13 @@ export const testRunnerConcept = {
      * @param {Function} fn - Hook function
      */
     afterAll(fn) {
-      this.state.hooks.afterAll.push(fn);
+      const self = testRunnerConcept;
+
+      if (self.state.currentSuite) {
+        self.state.currentSuite.hooks.afterAll.push(fn);
+      } else {
+        self.state.globalHooks.afterAll.push(fn);
+      }
     },
 
     /**
@@ -68,7 +136,13 @@ export const testRunnerConcept = {
      * @param {Function} fn - Hook function
      */
     beforeEach(fn) {
-      this.state.hooks.beforeEach.push(fn);
+      const self = testRunnerConcept;
+
+      if (self.state.currentSuite) {
+        self.state.currentSuite.hooks.beforeEach.push(fn);
+      } else {
+        self.state.globalHooks.beforeEach.push(fn);
+      }
     },
 
     /**
@@ -76,27 +150,223 @@ export const testRunnerConcept = {
      * @param {Function} fn - Hook function
      */
     afterEach(fn) {
-      this.state.hooks.afterEach.push(fn);
+      const self = testRunnerConcept;
+
+      if (self.state.currentSuite) {
+        self.state.currentSuite.hooks.afterEach.push(fn);
+      } else {
+        self.state.globalHooks.afterEach.push(fn);
+      }
     },
 
     /**
      * Execute all tests sequentially
+     * @param {Object} options - Run options
      * @returns {Promise<Object>} Test results
      */
-    async run() {
-      // TODO: Implement run logic
-      // 1. Build test plan
-      // 2. Execute beforeAll hooks
-      // 3. For each test:
-      //    - Create isolated context
-      //    - Execute beforeEach hooks
-      //    - Execute test
-      //    - Execute afterEach hooks
-      //    - Destroy context
-      // 4. Execute afterAll hooks
-      // 5. Aggregate results
-      // 6. Emit suiteCompleted event
-      throw new Error('Not implemented');
+    async run(options = {}) {
+      const self = testRunnerConcept;
+      const isolate = options.isolate !== false; // Default true
+      const startTime = Date.now();
+
+      self.state.isRunning = true;
+      self.state.results = [];
+
+      self.notify('runStarted', {
+        suiteCount: self.state.suites.length,
+        isolate
+      });
+
+      try {
+        // 1. Execute global beforeAll hooks
+        for (const hook of self.state.globalHooks.beforeAll) {
+          await hook();
+        }
+
+        // 2. Execute each suite
+        for (const suite of self.state.suites) {
+          await self.actions._executeSuite(suite, { isolate });
+        }
+
+        // 3. Execute global afterAll hooks
+        for (const hook of self.state.globalHooks.afterAll) {
+          await hook();
+        }
+
+        // 4. Aggregate results
+        const stats = aggregateResults(self.state.results);
+        const duration = Date.now() - startTime;
+
+        const summary = {
+          ...stats,
+          totalDuration: duration,
+          results: self.state.results
+        };
+
+        // 5. Emit runCompleted event
+        self.notify('runCompleted', summary);
+
+        return summary;
+
+      } finally {
+        self.state.isRunning = false;
+      }
+    },
+
+    /**
+     * Execute a single test suite
+     * @param {Object} suite - Test suite
+     * @param {Object} options - Execution options
+     */
+    async _executeSuite(suite, options = {}) {
+      const self = testRunnerConcept;
+
+      self.notify('suiteStarted', {
+        name: suite.name,
+        testCount: suite.tests.length
+      });
+
+      const startTime = Date.now();
+
+      try {
+        // Execute suite beforeAll hooks
+        for (const hook of suite.hooks.beforeAll) {
+          await hook();
+        }
+
+        // Execute each test
+        for (const test of suite.tests) {
+          await self.actions._executeTest(test, suite, options);
+        }
+
+        // Execute suite afterAll hooks
+        for (const hook of suite.hooks.afterAll) {
+          await hook();
+        }
+
+        self.notify('suiteCompleted', {
+          name: suite.name,
+          duration: Date.now() - startTime
+        });
+
+      } catch (err) {
+        self.notify('suiteFailed', {
+          name: suite.name,
+          error: err
+        });
+      }
+    },
+
+    /**
+     * Execute a single test
+     * @param {Object} test - Test object
+     * @param {Object} suite - Parent suite
+     * @param {Object} options - Execution options
+     */
+    async _executeTest(test, suite, options = {}) {
+      const self = testRunnerConcept;
+      const isolate = options.isolate !== false;
+
+      self.state.currentTest = test;
+
+      self.notify('testStarted', {
+        name: test.name,
+        suite: suite.name
+      });
+
+      const startTime = Date.now();
+      const result = {
+        name: test.name,
+        suite: suite.name,
+        status: 'passed',
+        duration: 0,
+        error: null
+      };
+
+      let contextId = null;
+
+      try {
+        // Create isolated context if requested
+        if (isolate && browserConcept.state.browser) {
+          contextId = await contextConcept.actions.createContext();
+        }
+
+        // Execute global beforeEach hooks
+        for (const hook of self.state.globalHooks.beforeEach) {
+          await hook();
+        }
+
+        // Execute suite beforeEach hooks
+        for (const hook of suite.hooks.beforeEach) {
+          await hook();
+        }
+
+        // Execute test function
+        await test.fn();
+
+        result.status = 'passed';
+
+      } catch (err) {
+        result.status = 'failed';
+        result.error = {
+          message: err.message,
+          stack: err.stack,
+          errorType: err.errorType || err.name
+        };
+      } finally {
+        try {
+          // Execute suite afterEach hooks
+          for (const hook of suite.hooks.afterEach) {
+            await hook();
+          }
+
+          // Execute global afterEach hooks
+          for (const hook of self.state.globalHooks.afterEach) {
+            await hook();
+          }
+
+          // Destroy context if created
+          if (contextId) {
+            await contextConcept.actions.destroyContext(contextId);
+          }
+        } catch (cleanupErr) {
+          // Log cleanup errors but don't fail the test
+          console.error('Cleanup error:', cleanupErr);
+        }
+
+        result.duration = Date.now() - startTime;
+        self.state.results.push(result);
+
+        self.notify('testCompleted', result);
+
+        self.state.currentTest = null;
+      }
+    },
+
+    /**
+     * Clear all registered suites and hooks
+     */
+    reset() {
+      const self = testRunnerConcept;
+
+      self.state.suites = [];
+      self.state.currentSuite = null;
+      self.state.currentTest = null;
+      self.state.globalHooks = {
+        beforeAll: [],
+        afterAll: [],
+        beforeEach: [],
+        afterEach: []
+      };
+      self.state.results = [];
+    },
+
+    /**
+     * Get test results
+     * @returns {Array} Test results
+     */
+    getResults() {
+      return [...testRunnerConcept.state.results];
     }
   },
 

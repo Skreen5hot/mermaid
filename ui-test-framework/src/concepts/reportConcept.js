@@ -5,8 +5,8 @@
  * FR-50: Test Reports
  */
 
-import { writeFile } from 'fs/promises';
-import { join } from 'path';
+import { writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
 
 export const reportConcept = {
   state: {
@@ -22,18 +22,20 @@ export const reportConcept = {
      * @returns {Promise<void>}
      */
     async generateReport(results) {
-      if (this.state.consoleEnabled) {
+      const self = reportConcept;
+
+      if (self.state.consoleEnabled) {
         const output = formatConsoleOutput(results);
         console.log(output);
       }
 
-      if (this.state.jsonEnabled) {
+      if (self.state.jsonEnabled) {
         const jsonReport = buildJSONReport(results);
-        await this.writeResultsFile(jsonReport);
+        await self.actions.writeResultsFile(jsonReport);
       }
 
-      this.notify('reportGenerated', {
-        format: this.state.jsonEnabled ? 'json' : 'console'
+      self.notify('reportGenerated', {
+        format: self.state.jsonEnabled ? 'json' : 'console'
       });
     },
 
@@ -52,8 +54,19 @@ export const reportConcept = {
      * @returns {Promise<void>}
      */
     async writeResultsFile(data) {
-      // TODO: Ensure output directory exists
-      const filePath = join(this.state.outputDir, 'results.json');
+      const self = reportConcept;
+      const filePath = join(self.state.outputDir, 'results.json');
+
+      // Ensure output directory exists
+      try {
+        await mkdir(dirname(filePath), { recursive: true });
+      } catch (err) {
+        // Directory may already exist, continue
+        if (err.code !== 'EEXIST') {
+          throw err;
+        }
+      }
+
       await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
     }
   },

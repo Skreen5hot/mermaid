@@ -20,6 +20,8 @@ export const browserConcept = {
     cdpPort: null,           // CDP debugging port
     messageId: 0,            // CDP message ID counter
     pendingMessages: new Map(), // Pending CDP responses
+    sessions: new Map(),     // Target sessions (targetId -> sessionId)
+    isClosing: false,        // Flag to track intentional closure
     config: {
       executablePath: '',
       headless: true,
@@ -131,8 +133,8 @@ export const browserConcept = {
         });
 
         self.state.ws.on('close', () => {
-          // WebSocket closed - browser may have crashed
-          if (self.state.process && !self.state.process.killed) {
+          // WebSocket closed - check if it was intentional
+          if (!self.state.isClosing && self.state.process && !self.state.process.killed) {
             self.notify('browserCrashed', new BrowserCrashError({
               message: 'CDP WebSocket connection closed unexpectedly',
               pid: self.state.process?.pid
@@ -180,9 +182,10 @@ export const browserConcept = {
      * Send CDP command
      * @param {string} method - CDP method name
      * @param {Object} params - Command parameters
+     * @param {string} sessionId - Optional session ID for target-specific commands
      * @returns {Promise<Object>} Command result
      */
-    async sendCDPCommand(method, params = {}) {
+    async sendCDPCommand(method, params = {}, sessionId = null) {
       const self = browserConcept;
 
       if (!self.state.ws || self.state.ws.readyState !== WebSocket.OPEN) {
@@ -191,6 +194,11 @@ export const browserConcept = {
 
       const id = ++self.state.messageId;
       const message = { id, method, params };
+
+      // Add sessionId if provided (for target-specific commands)
+      if (sessionId) {
+        message.sessionId = sessionId;
+      }
 
       return new Promise((resolve, reject) => {
         self.state.pendingMessages.set(id, { resolve, reject });
@@ -213,6 +221,61 @@ export const browserConcept = {
     },
 
     /**
+     * Attach to a target and get session ID
+     * @param {string} targetId - Target ID to attach to
+     * @returns {Promise<string>} Session ID
+     */
+    async attachToTarget(targetId) {
+      const self = browserConcept;
+
+      // Check if already attached
+      if (self.state.sessions.has(targetId)) {
+        return self.state.sessions.get(targetId);
+      }
+
+      // Attach to target
+      const result = await self.actions.sendCDPCommand('Target.attachToTarget', {
+        targetId,
+        flatten: true
+      });
+
+      const sessionId = result.sessionId;
+      self.state.sessions.set(targetId, sessionId);
+
+      return sessionId;
+    },
+
+    /**
+     * Get or create a page target and attach to it
+     * @returns {Promise<{targetId: string, sessionId: string}>} Target and session info
+     */
+    async getPageTarget() {
+      const self = browserConcept;
+
+      // Get list of targets
+      const { targetInfos } = await self.actions.sendCDPCommand('Target.getTargets');
+
+      // Find or create a page target
+      let pageTarget = targetInfos.find(t => t.type === 'page');
+
+      if (!pageTarget) {
+        // Create a new page target
+        const result = await self.actions.sendCDPCommand('Target.createTarget', {
+          url: 'about:blank'
+        });
+        pageTarget = { targetId: result.targetId };
+      }
+
+      // Attach to the target
+      const sessionId = await self.actions.attachToTarget(pageTarget.targetId);
+
+      return {
+        targetId: pageTarget.targetId,
+        sessionId
+      };
+    },
+
+    /**
      * Gracefully close browser and cleanup resources
      * @returns {Promise<void>}
      */
@@ -222,6 +285,9 @@ export const browserConcept = {
       if (!self.state.process) {
         return; // Already closed or never launched
       }
+
+      // Set flag to prevent false crash detection
+      self.state.isClosing = true;
 
       try {
         // 1. Send CDP close command
@@ -270,7 +336,9 @@ export const browserConcept = {
         self.state.wsEndpoint = null;
         self.state.process = null;
         self.state.cdpPort = null;
+        self.state.isClosing = false;
         self.state.pendingMessages.clear();
+        self.state.sessions.clear();
       }
     },
 
