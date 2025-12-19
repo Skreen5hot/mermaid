@@ -444,18 +444,27 @@ export async function findAvailablePort() {
  */
 export async function waitForBrowserReady(port, timeout = 30000) {
   const startTime = Date.now();
+  let lastError = null;
+  let attemptCount = 0;
 
   while (Date.now() - startTime < timeout) {
     try {
       await fetchJSON(`http://localhost:${port}/json/version`);
       return; // Browser is ready
     } catch (err) {
+      lastError = err;
+      attemptCount++;
       // Not ready yet, wait and retry
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
 
-  throw new Error(`Browser did not become ready within ${timeout}ms`);
+  const elapsed = Date.now() - startTime;
+  throw new Error(
+    `Browser did not become ready within ${timeout}ms. ` +
+    `Port: ${port}, Attempts: ${attemptCount}, Elapsed: ${elapsed}ms. ` +
+    `Last error: ${lastError?.message || 'Unknown'}`
+  );
 }
 
 /**

@@ -20,6 +20,8 @@ const CHROME_PATH = process.env.CHROME_PATH ||
 
 // Helper to ensure clean state before each test
 async function ensureCleanState() {
+  const oldPid = browserConcept.state.process?.pid;
+
   try {
     await browserConcept.actions.close();
   } catch (err) {
@@ -36,8 +38,26 @@ async function ensureCleanState() {
   browserConcept.state.pendingMessages.clear();
   browserConcept.state.sessions.clear();
 
-  // Wait longer for cleanup - Chrome needs time to fully terminate
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Wait for Chrome process to actually exit
+  if (oldPid) {
+    const maxWait = 5000; // 5 seconds max wait
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWait) {
+      try {
+        // On Windows, this throws if process doesn't exist
+        process.kill(oldPid, 0);
+        // Process still exists, wait a bit
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (err) {
+        // Process is gone, we're good
+        break;
+      }
+    }
+  }
+
+  // Extra safety delay for port cleanup (OS needs time to release the port)
+  await new Promise(resolve => setTimeout(resolve, 1500));
 }
 
 test('browser lifecycle - launch and close', async (t) => {
