@@ -111,7 +111,7 @@ This framework provides a minimal, deterministic UI automation layer optimized f
   });
   ```
 - Tests execute sequentially in declaration order
-- Suite execution stops on first failure (fail-fast mode)
+- Tests continue after failures to provide comprehensive reporting (fail-fast mode is a future enhancement)
 
 **FR-31: Lifecycle Hooks**
 - `beforeAll(fn)`: Runs once before all tests in suite
@@ -320,18 +320,19 @@ Aggregate in final report
 ✅ JSON test reports  
 
 ### 6.2 Not Supported (Future Versions)
-❌ Parallel test execution  
-❌ Network request mocking/interception  
-❌ File upload/download handling  
-❌ Visual regression testing  
-❌ Cross-browser support (Firefox, Safari)  
-❌ Mobile device emulation  
-❌ iframe traversal  
-❌ Shadow DOM piercing  
-❌ Drag-and-drop interactions  
-❌ Hover state simulation  
-❌ Keyboard shortcut testing  
-❌ Screenshot/video capture  
+❌ Parallel test execution
+❌ Fail-fast mode (stop on first failure)
+❌ Network request mocking/interception
+❌ File upload/download handling
+❌ Visual regression testing
+❌ Cross-browser support (Firefox, Safari)
+❌ Mobile device emulation
+❌ iframe traversal
+❌ Shadow DOM piercing
+❌ Drag-and-drop interactions
+❌ Hover state simulation
+❌ Keyboard shortcut testing
+❌ Screenshot/video capture
 ❌ Performance profiling  
 
 ### 6.3 Explicitly Out of Scope

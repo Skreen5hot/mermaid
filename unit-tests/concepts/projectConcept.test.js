@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { projectConcept } from '../../src/concepts/projectConcept.js';
 
 describe('Project Concept', () => {
@@ -17,12 +17,12 @@ describe('Project Concept', () => {
     projectConcept.notify = originalNotify;
   });
 
-  it('should have a default state', () => {
+  test('should have a default state', () => {
     assert.deepStrictEqual(projectConcept.state.projects, [], 'projects should be an empty array');
     assert.strictEqual(projectConcept.state.activeProjectId, null, 'activeProjectId should be null');
   });
 
-  it("actions.setProjects() should update the projects array and notify", () => {
+  test("actions.setProjects() should update the projects array and notify", () => {
     const received = [];
     projectConcept.subscribe((event, payload) => received.push({ event, payload }));
 
@@ -36,7 +36,7 @@ describe('Project Concept', () => {
     assert.strictEqual(notification.payload, newProjects, 'Payload should be the new projects array');
   });
 
-  it("actions.setActiveProject() should update activeProjectId and notify", () => {
+  test("actions.setActiveProject() should update activeProjectId and notify", () => {
     const received = [];
     projectConcept.subscribe((event, payload) => received.push({ event, payload }));
 
@@ -51,7 +51,7 @@ describe('Project Concept', () => {
     assert.strictEqual(notification.payload.id, projectId, 'Payload should be the selected project object');
   });
 
-  it("actions.createProject() should emit a 'projectCreationRequested' event", () => {
+  test("actions.createProject() should emit a 'projectCreationRequested' event", () => {
     const received = [];
     projectConcept.subscribe((event, payload) => received.push({ event, payload }));
 
@@ -63,7 +63,7 @@ describe('Project Concept', () => {
     assert.strictEqual(received[0].payload, projectDetails, 'Payload should be the project details');
   });
 
-  it("actions.deleteProject() should emit a 'projectDeletionRequested' event", () => {
+  test("actions.deleteProject() should emit a 'projectDeletionRequested' event", () => {
     const received = [];
     projectConcept.subscribe((event, payload) => received.push({ event, payload }));
 
@@ -75,7 +75,7 @@ describe('Project Concept', () => {
     assert.deepStrictEqual(received[0].payload, { projectId }, 'Payload should be the project ID object');
   });
 
-  it("actions.addOrUpdateProject() should add a new project", () => {
+  test("actions.addOrUpdateProject() should add a new project", () => {
     const newProject = { id: 1, name: 'New Project' };
     projectConcept.actions.addOrUpdateProject(newProject);
 
@@ -83,7 +83,7 @@ describe('Project Concept', () => {
     assert.strictEqual(projectConcept.state.projects[0].name, 'New Project');
   });
 
-  it("actions.addOrUpdateProject() should update an existing project", () => {
+  test("actions.addOrUpdateProject() should update an existing project", () => {
     projectConcept.state.projects = [{ id: 1, name: 'Original Name' }];
     const updatedProject = { id: 1, name: 'Updated Name' };
     projectConcept.actions.addOrUpdateProject(updatedProject);

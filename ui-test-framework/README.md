@@ -350,6 +350,8 @@ expect(true).toBeTruthy();
 
 ### Error Types
 
+This framework uses **shared error types** from `../shared-test-utils/errors.js` to maintain consistency with the unit testing framework.
+
 | Error | Trigger | Fatal? |
 |-------|---------|--------|
 | `BrowserCrashError` | Browser process terminates | Yes |
@@ -359,6 +361,8 @@ expect(true).toBeTruthy();
 | `ElementNotInteractableError` | Element hidden/disabled | No |
 | `AssertionError` | Assertion fails | No |
 | `NavigationError` | Page load fails | No |
+
+All error types include a `toJSON()` method for machine-readable serialization and structured context for debugging.
 
 ### Structured Error Context
 
@@ -582,6 +586,14 @@ Based on the element snapshots in the trace:
 
 ---
 
+## Related Documentation
+
+- [Unit Testing Framework](../unit-tests/README.md) - Process-level isolated unit tests for concepts and synchronizations
+- [Test Strategy](../testStrategy.md) - Overall testing philosophy and patterns
+- [Shared Error Types](../shared-test-utils/errors.js) - Common error type definitions used across both testing frameworks
+
+---
+
 ## Contributing
 
 This framework is designed for agentic development workflows. When contributing:
@@ -591,6 +603,7 @@ This framework is designed for agentic development workflows. When contributing:
 3. Include unit tests for all new functionality
 4. Update trace logging for new actions
 5. Maintain machine-readable error context
+6. Use shared error types from `shared-test-utils/errors.js` for consistency
 
 ---
 

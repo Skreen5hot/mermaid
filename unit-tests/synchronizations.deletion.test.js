@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from './test-utils.js';
+import { describe, test, assert, beforeEach } from './test-utils.js';
 import { uiConcept } from '../src/concepts/uiConcept.js';
 import { projectConcept } from '../src/concepts/projectConcept.js';
 import { diagramConcept } from '../src/concepts/diagramConcept.js';
@@ -53,7 +53,7 @@ describe('Deletion Synchronizations from UI', () => {
   };
 
   describe('ui:deleteDiagramClicked Synchronization', () => {
-    it('should trigger diagramConcept.deleteDiagram when a saved diagram is active and user confirms', () => {
+    test('should trigger diagramConcept.deleteDiagram when a saved diagram is active and user confirms', () => {
       let wasCalled = false;
       diagramConcept.actions.deleteDiagram = ({ diagramId }) => {
         wasCalled = true;
@@ -68,7 +68,7 @@ describe('Deletion Synchronizations from UI', () => {
       tearDown();
     });
 
-    it('should NOT trigger deletion if the user cancels the confirmation', () => {
+    test('should NOT trigger deletion if the user cancels the confirmation', () => {
       let wasCalled = false;
       diagramConcept.actions.deleteDiagram = () => { wasCalled = true; };
       window.confirm = () => false;
@@ -82,7 +82,7 @@ describe('Deletion Synchronizations from UI', () => {
   });
 
   describe('ui:deleteProjectClicked Synchronization', () => {
-    it('should trigger projectConcept.deleteProject when a project is active', () => {
+    test('should trigger projectConcept.deleteProject when a project is active', () => {
       let wasCalled = false;
       projectConcept.actions.deleteProject = (projectId) => {
         wasCalled = true;
@@ -96,7 +96,7 @@ describe('Deletion Synchronizations from UI', () => {
       tearDown();
     });
 
-    it('should NOT trigger deletion if no project is active', () => {
+    test('should NOT trigger deletion if no project is active', () => {
       let wasCalled = false;
       projectConcept.actions.deleteProject = () => { wasCalled = true; };
       projectConcept.state.activeProjectId = null;

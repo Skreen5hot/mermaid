@@ -1,15 +1,15 @@
 import { createEventBus } from '../../src/utils/eventBus.js';
-import { describe, it } from '../test-helpers.js';
+import { describe, test } from '../test-helpers.js';
 import assert from '../../src/assert.js';
 
 describe('Event Bus', () => {
-  it('should create an event bus with subscribe and notify methods', () => {
+  test('should create an event bus with subscribe and notify methods', () => {
     const bus = createEventBus();
     assert.ok(bus.subscribe, 'Bus should have a subscribe method');
     assert.ok(bus.notify, 'Bus should have a notify method');
   });
 
-  it('should allow a subscriber to receive a notification', () => {
+  test('should allow a subscriber to receive a notification', () => {
     const bus = createEventBus();
     let receivedEvent = null;
     let receivedPayload = null;
@@ -25,7 +25,7 @@ describe('Event Bus', () => {
     assert.strictEqual(receivedPayload.data, 'hello', 'Should receive the correct payload');
   });
 
-  it('should notify all subscribers', () => {
+  test('should notify all subscribers', () => {
     const bus = createEventBus();
     let sub1Called = false;
     let sub2Called = false;
@@ -39,7 +39,7 @@ describe('Event Bus', () => {
     assert.ok(sub2Called, 'Second subscriber should be called');
   });
 
-  it('should isolate events between different bus instances', () => {
+  test('should isolate events between different bus instances', () => {
     const bus1 = createEventBus();
     const bus2 = createEventBus();
     let bus2SubscriberCalled = false;

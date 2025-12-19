@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { uiConcept } from '../../src/concepts/uiConcept.js';
 import { projectConcept } from '../../src/concepts/projectConcept.js';
 import { securityConcept } from '../../src/concepts/securityConcept.js';
@@ -97,7 +97,7 @@ describe('UI Concept', () => {
     });
 
     describe('Render Actions', () => {
-        it('[UNIT] renderProjectSelector: should update the project selector HTML', () => {
+        test('[UNIT] renderProjectSelector: should update the project selector HTML', () => {
             const projects = [{ id: 1, name: 'Project A' }, { id: 2, name: 'Project B' }];
             uiConcept.actions.renderProjectSelector({ projects, activeProjectId: 2 });
 
@@ -106,7 +106,7 @@ describe('UI Concept', () => {
             assert.include(selector.innerHTML, '<option value="2" selected>Project B</option>', 'Should contain and select Project B');
         });
 
-        it("[UNIT] renderEditor: should update the editor's value", () => {
+        test("[UNIT] renderEditor: should update the editor's value", () => {
             const newContent = 'graph TD; A-->B;';
             uiConcept.actions.renderEditor({ content: newContent });
 
@@ -115,7 +115,7 @@ describe('UI Concept', () => {
     });
 
     describe('Modal Actions', () => {
-        it('[UNIT] showNewDiagramModal: should display the modal', () => {
+        test('[UNIT] showNewDiagramModal: should display the modal', () => {
             const newModal = mockElements['new-modal'];
             assert.notStrictEqual(newModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
 
@@ -124,7 +124,7 @@ describe('UI Concept', () => {
             assert.strictEqual(newModal.style.display, 'flex', 'Modal style.display should be "flex"');
         });
 
-        it('[UNIT] showConnectProjectModal: should display the modal', () => {
+        test('[UNIT] showConnectProjectModal: should display the modal', () => {
             const connectModal = mockElements['connect-project-modal'];
             assert.notStrictEqual(connectModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
 
@@ -133,7 +133,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectModal.style.display, 'flex', 'Modal style.display should be "flex"');
         });
 
-        it('[UNIT] showUnlockSessionModal: should display the modal', () => {
+        test('[UNIT] showUnlockSessionModal: should display the modal', () => {
             const unlockModal = mockElements['unlock-session-modal'];
             assert.notStrictEqual(unlockModal.style.display, 'flex', 'Pre-condition: modal should be hidden');
 
@@ -144,7 +144,7 @@ describe('UI Concept', () => {
     });
 
     describe('Event Listeners', () => {
-        it("[UNIT] should notify 'ui:projectSelected' when the project selector is changed", () => {
+        test("[UNIT] should notify 'ui:projectSelected' when the project selector is changed", () => {
             let notifiedEvent = null;
             let notifiedPayload = null;
             uiConcept.subscribe((event, payload) => {
@@ -161,7 +161,7 @@ describe('UI Concept', () => {
             assert.deepStrictEqual(notifiedPayload, { projectId: 3 }, 'Payload should contain the selected project ID');
         });
 
-        it("[UNIT] should notify 'ui:createDiagramClicked' when the new diagram modal is submitted", () => {
+        test("[UNIT] should notify 'ui:createDiagramClicked' when the new diagram modal is submitted", () => {
             let notifiedEvent = null;
             let notifiedPayload = null;
             uiConcept.subscribe((event, payload) => {
@@ -205,7 +205,7 @@ describe('UI Concept', () => {
             uiConcept.actions.showConnectProjectModal();
         });
 
-        it('[UNIT] should initially show Git fields and hide Local fields', () => {
+        test('[UNIT] should initially show Git fields and hide Local fields', () => {
             assert.strictEqual(connectProviderSelect.value, 'github', 'Default provider should be github');
             assert.strictEqual(connectLocalProjectNameGroup.style.display, 'none', 'Local name group should be hidden');
             assert.strictEqual(connectGitFieldsGroup.style.display, 'block', 'Git fields group should be visible');
@@ -214,7 +214,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectPasswordCreationGroup.style.display, 'block', 'Password creation group should be visible');
         });
 
-        it('[UI-STATE] should show a single password field if other Git projects exist but session is locked', () => {
+        test('[UI-STATE] should show a single password field if other Git projects exist but session is locked', () => {
             // Arrange: Simulate a locked session with an existing Git project
             securityConcept.state.sessionPassword = null;
             projectConcept.state.projects = [{ id: 1, name: 'Existing Git Project', gitProvider: 'github' }];
@@ -228,7 +228,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectPasswordCreationGroup.style.display, 'none', 'Password creation group should be hidden');
         });
 
-        it('[UI-STATE] should reset to the default Git view when re-opened after being in the Local view', () => {
+        test('[UI-STATE] should reset to the default Git view when re-opened after being in the Local view', () => {
             // Arrange: First, switch the modal to the "Local" state
             connectProviderSelect.value = 'local';
             connectProviderSelect._trigger('change');
@@ -244,7 +244,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectLocalProjectNameGroup.style.display, 'none', 'Local name group should be hidden again');
         });
 
-        it('[UI-STATE] should HIDE password fields when a session password already exists', () => {
+        test('[UI-STATE] should HIDE password fields when a session password already exists', () => {
             // Arrange: Set a session password, simulating an already-unlocked session
             securityConcept.state.sessionPassword = 'my-global-password';
     
@@ -255,13 +255,13 @@ describe('UI Concept', () => {
             assert.strictEqual(connectMasterPasswordGroup.style.display, 'none', 'Password fields should be hidden');
         });
 
-        it('[UI-STATE] should SHOW password fields when no session password exists', () => {
+        test('[UI-STATE] should SHOW password fields when no session password exists', () => {
             securityConcept.state.sessionPassword = null;
             uiConcept.actions.showConnectProjectModal();
             assert.strictEqual(connectMasterPasswordGroup.style.display, 'block', 'Password fields should be visible');
         });
 
-        it('[UNIT] should show Local fields and hide Git fields when "Local" is selected', () => {
+        test('[UNIT] should show Local fields and hide Git fields when "Local" is selected', () => {
             connectProviderSelect.value = 'local';
             connectProviderSelect._trigger('change');
 
@@ -270,7 +270,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectMasterPasswordGroup.style.display, 'none', 'Master password group should be hidden');
         });
 
-        it('[UNIT] should disable submit button for local project if name is empty', () => {
+        test('[UNIT] should disable submit button for local project if name is empty', () => {
             connectProviderSelect.value = 'local';
             connectProviderSelect._trigger('change'); // Update visibility and button state
             connectLocalProjectNameInput.value = '';
@@ -279,7 +279,7 @@ describe('UI Concept', () => {
             assert.isTrue(connectSubmitBtn.disabled, 'Submit button should be disabled if local name is empty');
         });
 
-        it('[UNIT] should enable submit button for local project if name is filled', () => {
+        test('[UNIT] should enable submit button for local project if name is filled', () => {
             connectProviderSelect.value = 'local';
             connectProviderSelect._trigger('change');
             connectLocalProjectNameInput.value = 'My Local Project';
@@ -288,7 +288,7 @@ describe('UI Concept', () => {
             assert.isFalse(connectSubmitBtn.disabled, 'Submit button should be enabled if local name is filled');
         });
 
-        it('[UNIT] should disable submit button for Git project if fields are empty', () => {
+        test('[UNIT] should disable submit button for Git project if fields are empty', () => {
             connectProviderSelect.value = 'github';
             connectProviderSelect._trigger('change');
             connectRepoPathInput.value = ''; // Ensure empty
@@ -300,7 +300,7 @@ describe('UI Concept', () => {
             assert.isTrue(connectSubmitBtn.disabled, 'Submit button should be disabled if Git fields are empty');
         });
 
-        it('[UNIT] should disable submit button for Git project if passwords do not match', () => {
+        test('[UNIT] should disable submit button for Git project if passwords do not match', () => {
             connectProviderSelect.value = 'github';
             connectProviderSelect._trigger('change');
             connectRepoPathInput.value = 'owner/repo';
@@ -313,7 +313,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectPasswordError.style.display, 'block', 'Password error should be visible');
         });
 
-        it('[UNIT] should enable submit button for Git project if all fields are filled and passwords match', () => {
+        test('[UNIT] should enable submit button for Git project if all fields are filled and passwords match', () => {
             connectProviderSelect.value = 'github';
             connectProviderSelect._trigger('change');
             connectRepoPathInput.value = 'owner/repo';
@@ -326,7 +326,7 @@ describe('UI Concept', () => {
             assert.strictEqual(connectPasswordError.style.display, 'none', 'Password error should be hidden');
         });
 
-        it('[UI-STATE] should enable submit button for Git project if session is unlocked and fields are filled', () => {
+        test('[UI-STATE] should enable submit button for Git project if session is unlocked and fields are filled', () => {
             // Arrange: Simulate an unlocked session
             securityConcept.state.sessionPassword = 'my-global-password';
             uiConcept.actions.showConnectProjectModal(); // Re-show modal to apply state
@@ -340,7 +340,7 @@ describe('UI Concept', () => {
             assert.isFalse(connectSubmitBtn.disabled, 'Submit button should be enabled without password input');
         });
 
-        it('[UNIT] should notify with correct payload for local project creation', () => {
+        test('[UNIT] should notify with correct payload for local project creation', () => {
             let notifiedPayload = null;
             uiConcept.subscribe((event, payload) => { if (event === 'ui:connectProjectClicked') notifiedPayload = payload; });
 
@@ -359,7 +359,7 @@ describe('UI Concept', () => {
     });
 
     describe('View Toggles', () => {
-        it('[UNIT] toggleSplitView: should toggle the split view state', () => {
+        test('[UNIT] toggleSplitView: should toggle the split view state', () => {
             // Turn on split view
             uiConcept.actions.toggleSplitView();
             let state = uiConcept.getState();
@@ -375,7 +375,7 @@ describe('UI Concept', () => {
             assert.isFalse(mockElements['code-tab'].classList.contains('split-active-tab'), 'Code tab should not be grayed out');
         });
 
-        it('[UNIT] toggleFullscreen: should toggle fullscreen mode and update the button icon', () => {
+        test('[UNIT] toggleFullscreen: should toggle fullscreen mode and update the button icon', () => {
             const fullscreenBtn = mockElements['fullscreen-btn'];
             const body = global.document.body;
 

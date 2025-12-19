@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { gitlabAdapter } from '../../src/gitlab.js';
 
 describe('GitLab Adapter', () => {
@@ -32,7 +32,7 @@ describe('GitLab Adapter', () => {
   const projectId = 'test-owner%2Ftest-repo';
 
   describe('getRepoInfo', () => {
-    it('should call the correct project details endpoint', async () => {
+    test('should call the correct project details endpoint', async () => {
       fetchSpy.mock({ id: 1, default_branch: 'main' });
       await gitlabAdapter.getRepoInfo(owner, repo, token);
 
@@ -45,7 +45,7 @@ describe('GitLab Adapter', () => {
   });
 
   describe('listContents', () => {
-    it('should call the correct repository tree endpoint and map id to sha', async () => {
+    test('should call the correct repository tree endpoint and map id to sha', async () => {
       fetchSpy.mock([{ id: 'blob-sha-123', name: 'file.mmd', type: 'blob' }]);
       const result = await gitlabAdapter.listContents(owner, repo, 'mermaid', token);
 
@@ -58,7 +58,7 @@ describe('GitLab Adapter', () => {
   });
 
   describe('getContents', () => {
-    it('should call the correct file content endpoint and decode content', async () => {
+    test('should call the correct file content endpoint and decode content', async () => {
       // Mock the two fetch calls: getRepoInfo, then getContents
       global.fetch = async (url) => {
         fetchSpy.calls.push({ url });
@@ -80,7 +80,7 @@ describe('GitLab Adapter', () => {
   });
 
   describe('putContents', () => {
-    it('should use POST to create a new file', async () => {
+    test('should use POST to create a new file', async () => {
       // Mock getRepoInfo and the POST call
       global.fetch = async (url, options) => {
         fetchSpy.calls.push({ url, options });
@@ -101,7 +101,7 @@ describe('GitLab Adapter', () => {
       tearDown();
     });
 
-    it('should use PUT to update an existing file', async () => {
+    test('should use PUT to update an existing file', async () => {
       // Mock getRepoInfo and the PUT call
       global.fetch = async (url, options) => {
         fetchSpy.calls.push({ url, options });
@@ -123,7 +123,7 @@ describe('GitLab Adapter', () => {
   });
 
   describe('deleteContents', () => {
-    it('should use DELETE to remove a file', async () => {
+    test('should use DELETE to remove a file', async () => {
       // Mock getRepoInfo and the DELETE call
       global.fetch = async (url, options) => {
         fetchSpy.calls.push({ url, options });
@@ -146,7 +146,7 @@ describe('GitLab Adapter', () => {
   });
 
   describe('Rate Limit Handling', () => {
-    it('[UNIT] should retry with exponential backoff on a 429 error', async () => {
+    test('[UNIT] should retry with exponential backoff on a 429 error', async () => {
       let callCount = 0;
       global.fetch = async (url, options) => {
         callCount++;
@@ -165,7 +165,7 @@ describe('GitLab Adapter', () => {
       tearDown();
     });
 
-    it('[UNIT] should respect the Retry-After header', async () => {
+    test('[UNIT] should respect the Retry-After header', async () => {
       let callCount = 0;
       global.fetch = async (url, options) => {
         callCount++;

@@ -1,15 +1,10 @@
 /**
  * @file test-utils.js
- * @description Provides simple, zero-dependency test runner functions (`describe`, `it`)
+ * @description Provides simple, zero-dependency test runner functions (`describe`, `test`)
  * and a comprehensive assertion library (`assert`) for the test suite.
  */
 
-class AssertionError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'AssertionError';
-  }
-}
+import { AssertionError, SetupError, TeardownError } from '../shared-test-utils/errors.js';
 
 export const assert = {
   ok(value, message) {
@@ -32,7 +27,13 @@ export const assert = {
 
   strictEqual(actual, expected, message) {
     if (actual !== expected) {
-      throw new AssertionError(message || `Assertion failed: ${actual} !== ${expected}`);
+      throw new AssertionError({
+        message: message || 'Values are not strictly equal',
+        expected,
+        actual,
+        matcher: 'strictEqual',
+        diff: `Expected: ${JSON.stringify(expected)}\nActual:   ${JSON.stringify(actual)}`
+      });
     }
   },
 
@@ -82,18 +83,21 @@ export const assert = {
 };
 
 const beforeEachStack = [];
+const afterEachStack = [];
 
 export function describe(name, fn) {
   console.log(`\n${name}`);
-  // Push a new level for beforeEach hooks
+  // Push a new level for hooks
   beforeEachStack.push(null);
+  afterEachStack.push(null);
   fn();
   // Pop the level after the suite has run
   beforeEachStack.pop();
+  afterEachStack.pop();
 }
 
 /**
- * Registers a function to be run before each 'it' block in the current 'describe' suite.
+ * Registers a function to be run before each 'test' block in the current 'describe' suite.
  * @param {Function} fn - The setup function to run.
  */
 export function beforeEach(fn) {
@@ -102,9 +106,20 @@ export function beforeEach(fn) {
   }
 }
 
+/**
+ * Registers a function to be run after each 'test' block in the current 'describe' suite.
+ * Guaranteed to execute even if the test fails.
+ * @param {Function} fn - The teardown function to run.
+ */
+export function afterEach(fn) {
+  if (afterEachStack.length > 0) {
+    afterEachStack[afterEachStack.length - 1] = fn;
+  }
+}
+
 let testQueue = [];
 
-export async function it(name, testFn) {
+export async function test(name, testFn) {
   // If called from within describe, just queue the test
   if (beforeEachStack.length > 0 && !testFn.isExecuting) {
     testQueue.push({ name, testFn });
@@ -114,26 +129,60 @@ export async function it(name, testFn) {
   // Mark as executing to prevent re-queuing
   testFn.isExecuting = true;
 
-  // Find the nearest beforeEach hook in the stack and run it
-  const hook = [...beforeEachStack].reverse().find(h => h !== null);
-  if (hook) await hook();
+  let testError = null;
 
   try {
+    // Setup phase: Run beforeEach hook
+    const setupHook = [...beforeEachStack].reverse().find(h => h !== null);
+    if (setupHook) {
+      try {
+        await setupHook();
+      } catch (error) {
+        throw new SetupError({
+          hook: 'beforeEach',
+          originalError: error,
+          testName: name
+        });
+      }
+    }
+
+    // Execution phase: Run the actual test
     await testFn();
     console.log(`  ✓ PASS: ${name}`);
-  } catch (error) {
-    handleFailure(error);
-  } finally {
-    // Clean up after the test runs
-    const tearDownHook = [...beforeEachStack].reverse().find(h => h && h.tearDown);
-    if (tearDownHook) {
-      tearDownHook.tearDown();
-    }
-  }
 
-  function handleFailure(error) {
+  } catch (error) {
+    testError = error;
     console.error(`  ✗ FAIL: ${name}`);
     console.error(error);
-    process.exit(1);
+
+  } finally {
+    // Teardown phase: GUARANTEED cleanup - always runs
+    const teardownHook = [...afterEachStack].reverse().find(h => h !== null);
+    if (teardownHook) {
+      try {
+        await teardownHook();
+      } catch (cleanupError) {
+        const teardownErr = new TeardownError({
+          hook: 'afterEach',
+          originalError: cleanupError,
+          testName: name
+        });
+        console.error(`  ⚠ Cleanup error: ${teardownErr.message}`);
+        console.error(cleanupError);
+
+        // If test passed but cleanup failed, treat as failure
+        if (!testError) {
+          testError = teardownErr;
+        }
+      }
+    }
+
+    // If any error occurred (test or cleanup), exit with failure
+    if (testError) {
+      process.exit(1);
+    }
   }
 }
+
+// Legacy alias for backwards compatibility
+export const it = test;

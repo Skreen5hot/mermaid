@@ -14,7 +14,7 @@ This project is built using the **Concepts and Synchronizations** architecture, 
     *   `storageConcept.js`: Handles all interactions with the browser's IndexedDB for persistence.
     *   `uiConcept.js`: Manages all direct DOM manipulations and UI state.
 *   `/src/synchronizations.js`: The "wiring" layer of the application. It listens for events from concepts and triggers actions in other concepts, defining all cross-concept interactions.
-*   `/tests`: Contains unit and integration tests for the concepts and their synchronizations.
+*   `/unit-tests`: Contains unit and integration tests for the concepts and their synchronizations.
 *   `index.html`: The main HTML file and application entry point.
 
 ### How to Use

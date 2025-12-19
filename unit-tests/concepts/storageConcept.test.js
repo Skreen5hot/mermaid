@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { storageConcept } from '../../src/concepts/storageConcept.js';
 
 // Mock the normalization functions for testing purposes
@@ -137,7 +137,7 @@ describe('Storage Concept', () => {
   const isJsonLd = (obj) => obj['@context'] && obj['@type'];
 
   describe('Project CRUD', () => {
-    it('[UNIT] should add and get a project', async () => {
+    test('[UNIT] should add and get a project', async () => {
       const project = { name: 'Project Alpha' };
       const id = await storageConcept.actions.addProject(project);
       assert.strictEqual(id, 1, 'Should return the new ID');
@@ -148,7 +148,7 @@ describe('Storage Concept', () => {
       assert.isTrue(isSimpleJson(retrieved[0]), 'Retrieved project should be in simple JSON format');
     });
 
-    it('[UNIT] should get a project and normalize JSON-LD data', async () => {
+    test('[UNIT] should get a project and normalize JSON-LD data', async () => {
       // Simulate a project stored in JSON-LD format
       const jsonLdProject = {
         id: 10, // Pre-defined ID for direct retrieval
@@ -181,7 +181,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(retrieved.createdAt.toISOString(), '2023-01-01T00:00:00.000Z', 'createdAt should match');
     });
 
-    it('[UNIT] should update a project', async () => {
+    test('[UNIT] should update a project', async () => {
       const project = { name: 'Project Beta' };
       const id = await storageConcept.actions.addProject(project);
       
@@ -193,7 +193,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(retrieved[0].name, 'Project Beta Updated', 'Project name should be updated');
     });
 
-    it('[UNIT] should delete a project', async () => {
+    test('[UNIT] should delete a project', async () => {
       const id = await storageConcept.actions.addProject({ name: 'Project Gamma' });
       await storageConcept.actions.deleteProject(id);
 
@@ -203,7 +203,7 @@ describe('Storage Concept', () => {
   });
 
   describe('Diagram CRUD', () => {
-    it('[UNIT] should add and get a diagram', async () => {
+    test('[UNIT] should add and get a diagram', async () => {
       const diagram = { title: 'Diagram 1', projectId: 1 };
       const id = await storageConcept.actions.addDiagram(diagram); // ID will be 1
 
@@ -220,7 +220,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(rawData['@id'], 'urn:mermaid-ide:diagram:1', 'Raw data should have correct @id');
     });
 
-    it('[UNIT] should get a diagram and normalize JSON-LD data', async () => {
+    test('[UNIT] should get a diagram and normalize JSON-LD data', async () => {
       // Simulate a diagram stored in JSON-LD format
       const jsonLdDiagram = {
         id: 20, // Pre-defined ID for direct retrieval
@@ -249,7 +249,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(retrieved.createdAt.toISOString(), '2023-03-01T10:00:00.000Z', 'createdAt should match');
     });
 
-    it('[UNIT] should get diagrams by project ID and normalize JSON-LD data', async () => {
+    test('[UNIT] should get diagrams by project ID and normalize JSON-LD data', async () => {
       mockDbStore.diagrams.push({ id: 1, title: 'D1', projectId: 1 }); // Simple JSON
       mockDbStore.diagrams.push({ id: 2, "@context": "url", "@type": "bfo:BFO_0000031", "@id": "urn:diagram:2", "bfo:BFO_0000129": { "@id": "urn:project:1" }, "schema:name": "D2.mmd", "schema:text": "content" }); // JSON-LD
       mockDbStore.diagrams.push({ id: 3, title: 'D3', projectId: 2 }); // Simple JSON
@@ -261,7 +261,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(project1Diagrams[1].title, 'D2.mmd', 'Normalized title should be correct');
     });
 
-    it('[UNIT] should get diagrams by project ID', async () => {
+    test('[UNIT] should get diagrams by project ID', async () => {
       await storageConcept.actions.addDiagram({ title: 'D1', projectId: 1 });
       await storageConcept.actions.addDiagram({ title: 'D2', projectId: 2 });
       await storageConcept.actions.addDiagram({ title: 'D3', projectId: 1 });
@@ -270,7 +270,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(project1Diagrams.length, 2, 'Should retrieve 2 diagrams for project 1');
     });
 
-    it('[UNIT] should delete all diagrams for a project', async () => {
+    test('[UNIT] should delete all diagrams for a project', async () => {
       await storageConcept.actions.addDiagram({ title: 'D1', projectId: 1 });
       await storageConcept.actions.addDiagram({ title: 'D2', projectId: 2 });
       await storageConcept.actions.addDiagram({ title: 'D3', projectId: 1 });
@@ -283,7 +283,7 @@ describe('Storage Concept', () => {
   });
 
   describe('SyncQueue CRUD', () => {
-    it('[UNIT] should add and get sync queue items', async () => {
+    test('[UNIT] should add and get sync queue items', async () => {
       const item = { action: 'create', payload: {} };
       await storageConcept.actions.addSyncQueueItem(item);
 
@@ -292,7 +292,7 @@ describe('Storage Concept', () => {
       assert.strictEqual(items[0].action, 'create', 'Item action should match');
     });
 
-    it('[UNIT] should delete a sync queue item', async () => {
+    test('[UNIT] should delete a sync queue item', async () => {
       const id = await storageConcept.actions.addSyncQueueItem({ action: 'delete' });
       await storageConcept.actions.deleteSyncQueueItem(id);
 

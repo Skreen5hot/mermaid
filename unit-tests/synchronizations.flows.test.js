@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from './test-utils.js';
+import { describe, test, assert, beforeEach } from './test-utils.js';
 import { synchronizations } from '../src/synchronizations.js';
 import { uiConcept } from '../src/concepts/uiConcept.js';
 import { projectConcept } from '../src/concepts/projectConcept.js';
@@ -62,7 +62,7 @@ describe('Integration Synchronizations', () => {
   });
 
   describe('Connect Flow', () => {
-    it('[INTEGRATION] should trigger project creation on ui:connectProjectClicked', async () => {
+    test('[INTEGRATION] should trigger project creation on ui:connectProjectClicked', async () => {
       const connectPayload = {
         gitProvider: 'github',
         repositoryPath: 'owner/repo',
@@ -85,7 +85,7 @@ describe('Integration Synchronizations', () => {
       assert.isTrue(spies.Object_loadProjects.called, 'projectConcept.loadProjects should be called to refresh UI');
     });
 
-    it('[INTEGRATION] should show a notification on connection failure', async () => {
+    test('[INTEGRATION] should show a notification on connection failure', async () => {
       const connectPayload = { gitProvider: 'github', repositoryPath: 'owner/repo' };
 
       // Mock a failed API validation
@@ -100,7 +100,7 @@ describe('Integration Synchronizations', () => {
   });
 
   describe('Unlock Flow', () => {
-    it('[INTEGRATION] should load diagrams after a successful unlock', async () => {
+    test('[INTEGRATION] should load diagrams after a successful unlock', async () => {
       // Setup initial state
       projectConcept.state.projects = [{ id: 1, name: 'Test Project', encryptedToken: {} }];
       projectConcept.state.activeProjectId = 1;
@@ -116,7 +116,7 @@ describe('Integration Synchronizations', () => {
       assert.isTrue(spies.Object_loadDiagramsForProject.called, 'diagramConcept.loadDiagramsForProject should be called after unlock');
     });
 
-    it('[INTEGRATION] should NOT load diagrams on a failed unlock', async () => {
+    test('[INTEGRATION] should NOT load diagrams on a failed unlock', async () => {
       projectConcept.state.projects = [{ id: 1, name: 'Test Project', encryptedToken: {} }];
       projectConcept.state.activeProjectId = 1;
 
@@ -132,7 +132,7 @@ describe('Integration Synchronizations', () => {
   });
 
   describe('Rename Flow', () => {
-    it('[INTEGRATION] should update storage and sync queue on rename', async () => {
+    test('[INTEGRATION] should update storage and sync queue on rename', async () => {
       const renamePayload = { diagramId: 101, newTitle: 'Renamed Diagram.mmd' };
       const originalDiagram = { id: 101, title: 'Original.mmd', content: 'graph TD', projectId: 1 };
 

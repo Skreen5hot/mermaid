@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "test": "node run-tests.js",
+    "test:ui": "cd ui-test-framework && npm test",
+    "test:all": "npm test && npm run test:ui",
     "security-check": "npm audit --audit-level=high",
     "prepare": "husky install",
-"build": "mkdir -p dist && cp -r index.html styles src dist/"
+    "build": "mkdir -p dist && cp -r index.html styles src dist/"
   },
   "keywords": [],
   "author": "",

@@ -14,16 +14,61 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+
       - name: Install dependencies
         run: npm install
-      - name: Run tests
-        run: npm test
+
+      # Fast feedback: Unit tests
+      - name: Run unit tests
+        run: npm test -- --write-json
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-results
+          path: unit-test-results.json
+
+      - name: Add test summary to workflow
+        if: always()
+        run: |
+          if [ -f unit-test-results.json ]; then
+            echo "## Unit Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            TOTAL=$(jq '.summary.total' unit-test-results.json)
+            PASSED=$(jq '.summary.passed' unit-test-results.json)
+            FAILED=$(jq '.summary.failed' unit-test-results.json)
+            PASS_RATE=$(jq '.summary.passRate' unit-test-results.json)
+            DURATION=$(jq '.summary.duration' unit-test-results.json)
+            echo "- **Total Files**: $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "- **Passed**: ✅ $PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed**: ❌ $FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "- **Pass Rate**: $PASS_RATE%" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration**: ${DURATION}ms" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Run security audit
         run: npm run security-check
+
+      # UI tests: Only on main/dev branches (slower, more comprehensive)
+      - name: Install UI test framework dependencies
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+        run: |
+          cd ui-test-framework
+          npm install
+
+      - name: Run UI tests (headless)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+        run: |
+          cd ui-test-framework
+          npm test -- --headless
+        env:
+          CI: true
 
   # 🎯 UNIFIED DEPLOYMENT JOB
   # Deploys main to root (/) and dev to /dev/ subdirectory

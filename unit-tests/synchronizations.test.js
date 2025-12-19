@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from './test-utils.js';
+import { describe, test, assert, beforeEach } from './test-utils.js';
 
 // Import all concepts to be tested
 import { storageConcept } from '../src/concepts/storageConcept.js';
@@ -190,7 +190,7 @@ beforeEach(() => {
 
 describe('Synchronizations (Integration Tests)', () => {
 
-    it('Storage -> Project -> UI: Initial app load should fetch projects and render the UI', async () => {
+    test('Storage -> Project -> UI: Initial app load should fetch projects and render the UI', async () => {
         // Arrange: Define what the mock database will return
         mockDbStore.projects = [{ id: 1, name: 'My First Project' }];
 
@@ -208,7 +208,7 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.ok(selectorHtml.includes('My First Project'), 'UI should be rendered with the project name');
     });
 
-    it('UI -> Project -> Storage: Creating a new project', async () => {
+    test('UI -> Project -> Storage: Creating a new project', async () => {
         // Arrange: Simulate a UI event for creating a new project
         const projectDetails = { gitProvider: 'github', repositoryPath: 'test/repo', token: 't', password: 'p' };
 
@@ -223,7 +223,7 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.strictEqual(mockDbStore.projects[0]['schema:name'], 'test/repo', 'The new project should be in the mock DB');
     });
 
-    it('[INTEGRATION] Creating a new project should auto-select it', async () => {
+    test('[INTEGRATION] Creating a new project should auto-select it', async () => {
         let renderProjectSelectorCalled = false;
         uiConcept.actions.renderProjectSelector = () => {
             renderProjectSelectorCalled = true;
@@ -242,7 +242,7 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.isTrue(renderProjectSelectorCalled, 'The UI should be instructed to re-render the project selector');
     });
 
-    it('Storage -> Project -> Diagram: Initial load with empty DB should create a default project and diagram', async () => {
+    test('Storage -> Project -> Diagram: Initial load with empty DB should create a default project and diagram', async () => {
         // Arrange: Ensure the mock database is empty
         mockDbStore.projects = [];
         mockDbStore.diagrams = [];
@@ -263,7 +263,7 @@ describe('Synchronizations (Integration Tests)', () => {
         assert.strictEqual(mockDbStore.diagrams[0]['schema:name'], 'example.mmd', 'The diagram should be named "example.mmd"');
     });
 
-    it('UI -> Diagram -> UI: Creating a new diagram should auto-select it and populate the editor', async () => {
+    test('UI -> Diagram -> UI: Creating a new diagram should auto-select it and populate the editor', async () => {
         // Arrange: Set an active project
         projectConcept.state.activeProjectId = 1;
 
@@ -295,7 +295,7 @@ describe('UI -> File I/O Synchronizations', () => {
         };
     });
 
-    it('UI -> Storage: Uploading .mmd files should create new diagrams', async () => {
+    test('UI -> Storage: Uploading .mmd files should create new diagrams', async () => {
         // Arrange
         projectConcept.state.activeProjectId = 1;
         mockDbStore.diagrams = [];
@@ -316,7 +316,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.strictEqual(mockDbStore.diagrams[0].title, 'upload1.mmd', 'First uploaded diagram should be saved');
     });
 
-    it('UI -> Action: Export .mmd should trigger a download of the active diagram', async () => {
+    test('UI -> Action: Export .mmd should trigger a download of the active diagram', async () => {
         // Arrange
         diagramConcept.state.activeDiagram = { id: 5, title: 'active_diagram.mmd', content: 'graph TD; E-->F;' };
 
@@ -329,7 +329,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.strictEqual(downloadFileSpy.content, 'graph TD; E-->F;', 'Download content should match active diagram content');
     });
 
-    it('UI -> Action: Download .zip should trigger a download with all project diagrams', async () => {
+    test('UI -> Action: Download .zip should trigger a download with all project diagrams', async () => {
         // Arrange
         projectConcept.state.activeProjectId = 1;
         projectConcept.state.projects = [{ id: 1, name: 'My Test Project' }];
@@ -345,7 +345,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.isTrue(downloadFileSpy.content.isMockBlob, 'Download content should be a (mocked) zip blob');
     });
 
-    it('UI -> Project: Renaming a project should update its name in storage', async () => {
+    test('UI -> Project: Renaming a project should update its name in storage', async () => {
         // Arrange
         mockDbStore.projects = [{ id: 1, name: 'Old Name' }];
         projectConcept.state.projects = mockDbStore.projects;
@@ -361,7 +361,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.strictEqual(mockDbStore.projects[0]['schema:name'], 'New Name', 'Project name should be updated in the mock DB');
     });
 
-    it('UI -> Project: Disconnecting a Git project should turn it into a local project', async () => {
+    test('UI -> Project: Disconnecting a Git project should turn it into a local project', async () => {
         // Arrange
         const gitProject = {
             id: 1,
@@ -386,7 +386,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.isNull(updatedProject.encryptedToken, 'Project should no longer have an encrypted token');
     });
 
-    it('UI -> Project: Connecting a local project to Git should update its properties', async () => {
+    test('UI -> Project: Connecting a local project to Git should update its properties', async () => {
         // Arrange
         const localProject = { id: 1, name: 'Local Project', gitProvider: 'local', repositoryPath: null };
         mockDbStore.projects = [localProject];
@@ -418,7 +418,7 @@ describe('UI -> File I/O Synchronizations', () => {
         assert.isTrue(syncTriggered, 'A sync should be triggered after connecting a project');
     });
 
-    it('UI -> Diagram: Deleting a local-only diagram should remove it from the sync queue', async () => {
+    test('UI -> Diagram: Deleting a local-only diagram should remove it from the sync queue', async () => {
         // Arrange
         projectConcept.state.activeProjectId = 1;
         mockDbStore.diagrams = [{ id: 10, projectId: 1, title: 'local-only.mmd', lastModifiedRemoteSha: null }];
@@ -441,7 +441,7 @@ describe('UI -> File I/O Synchronizations', () => {
 });
 
 describe('Global Password Architecture (Integration Tests)', () => {
-    it('Creating a second Git project should reuse the session password', async () => {
+    test('Creating a second Git project should reuse the session password', async () => {
         let firstPasswordUsed = '';
         let secondPasswordUsed = '';
 
@@ -472,7 +472,7 @@ describe('Global Password Architecture (Integration Tests)', () => {
         assert.strictEqual(securityConcept.state.sessionPassword, 'my-global-password', 'Session password should be set');
     });
 
-    it('Switching between two Git projects should not require re-authentication if session is unlocked', async () => {
+    test('Switching between two Git projects should not require re-authentication if session is unlocked', async () => {
         let unlockModalShown = false;
         uiConcept.actions.showUnlockSessionModal = () => { unlockModalShown = true; };
 

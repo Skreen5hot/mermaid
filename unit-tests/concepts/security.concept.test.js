@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { securityConcept } from '../../src/concepts/securityConcept.js';
 
 describe('Security Concept', () => {
@@ -11,7 +11,7 @@ describe('Security Concept', () => {
   const password = 'test-password';
   const token = 'test-token-123';
 
-  it('[UNIT] encryptToken: Should produce a valid ciphertext, salt, and IV', async () => {
+  test('[UNIT] encryptToken: Should produce a valid ciphertext, salt, and IV', async () => {
     const encrypted = await securityConcept.actions.encryptToken(token, password);
 
     assert.isNotNull(encrypted, 'Encrypted bundle should not be null');
@@ -21,7 +21,7 @@ describe('Security Concept', () => {
     assert.isAbove(encrypted.ciphertext.byteLength, 0, 'Ciphertext should not be empty');
   });
 
-  it('[UNIT] decryptToken: Should correctly decrypt a token given the correct password', async () => {
+  test('[UNIT] decryptToken: Should correctly decrypt a token given the correct password', async () => {
     const encrypted = await securityConcept.actions.encryptToken(token, password);
     const decrypted = await securityConcept.actions.decryptToken(encrypted, password);
 
@@ -29,7 +29,7 @@ describe('Security Concept', () => {
     assert.strictEqual(securityConcept.state.decryptedToken, token, 'Decrypted token should be stored in state');
   });
 
-  it('[UNIT] decryptToken Failure: Should throw an error when given an incorrect password', async () => {
+  test('[UNIT] decryptToken Failure: Should throw an error when given an incorrect password', async () => {
     const encrypted = await securityConcept.actions.encryptToken(token, password);
     let didThrow = false;
 
@@ -44,7 +44,7 @@ describe('Security Concept', () => {
     assert.isNull(securityConcept.state.decryptedToken, 'State should remain null after a failed decryption');
   });
 
-  it('[UNIT] clearDecryptedToken: Should set the in-memory decryptedToken state to null', async () => {
+  test('[UNIT] clearDecryptedToken: Should set the in-memory decryptedToken state to null', async () => {
     // First, set the state to a decrypted value
     const encrypted = await securityConcept.actions.encryptToken(token, password);
     await securityConcept.actions.decryptToken(encrypted, password);

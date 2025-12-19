@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { syncService } from '../../src/concepts/syncService.js';
 import { projectConcept } from '../../src/concepts/projectConcept.js';
 import { securityConcept } from '../../src/concepts/securityConcept.js';
@@ -50,7 +50,7 @@ describe('Sync Concept', () => {
   });
 
   describe('Pull Logic', () => {
-    it('[UNIT] Pull Logic - New Remote File: should call addDiagram', async () => {
+    test('[UNIT] Pull Logic - New Remote File: should call addDiagram', async () => {
       let addDiagramCalled = false;
       
       // Configure mocks for this specific test
@@ -68,7 +68,7 @@ describe('Sync Concept', () => {
       assert.isTrue(addDiagramCalled, 'storageConcept.addDiagram should have been called');
     });
 
-    it('[UNIT] Pull Logic - Updated Remote File: should call updateDiagram', async () => {
+    test('[UNIT] Pull Logic - Updated Remote File: should call updateDiagram', async () => {
       let updateDiagramCalled = false;
       gitAbstractionConcept.actions.listContents = () => Promise.resolve([{ name: 'existing.mmd', path: 'mermaid/existing.mmd', sha: 'new-sha' }]);
       storageConcept.actions.getDiagramsByProjectId = () => Promise.resolve([{ title: 'existing.mmd', lastModifiedRemoteSha: 'old-sha' }]);
@@ -84,7 +84,7 @@ describe('Sync Concept', () => {
       assert.isTrue(updateDiagramCalled, 'storageConcept.updateDiagram should have been called');
     });
 
-    it('[UNIT] Pull Logic - Deleted Remote File: should call deleteDiagram', async () => {
+    test('[UNIT] Pull Logic - Deleted Remote File: should call deleteDiagram', async () => {
       let deleteDiagramCalled = false;
       gitAbstractionConcept.actions.listContents = () => Promise.resolve([]); // Remote is empty
       storageConcept.actions.getDiagramsByProjectId = () => Promise.resolve([{ id: 101, title: 'deleted.mmd', lastModifiedRemoteSha: 'old-sha' }]);
@@ -99,7 +99,7 @@ describe('Sync Concept', () => {
       assert.isTrue(deleteDiagramCalled, 'storageConcept.deleteDiagram should have been called');
     });
 
-    it('[UNIT] Pull Logic - Missing Remote Directory: should create the directory', async () => {
+    test('[UNIT] Pull Logic - Missing Remote Directory: should create the directory', async () => {
       let putContentsCalled = false;
       // Mock listContents to throw a 404 error
       gitAbstractionConcept.actions.listContents = () => {
@@ -119,7 +119,7 @@ describe('Sync Concept', () => {
   });
 
   describe('Push Logic', () => {
-    it('[UNIT] Push Logic: should call putContents for a "create" item', async () => {
+    test('[UNIT] Push Logic: should call putContents for a "create" item', async () => {
       let putContentsCalled = false;
       const queueItem = { id: 1, action: 'create', payload: { title: 'new.mmd', content: 'new content' } };
       storageConcept.actions.getSyncQueueItems = () => Promise.resolve([queueItem]);
@@ -137,7 +137,7 @@ describe('Sync Concept', () => {
       assert.isTrue(putContentsCalled, 'gitAbstractionConcept.putContents should have been called');
     });
 
-    it('[UNIT] Push Logic: should call putContents for an "update" item', async () => {
+    test('[UNIT] Push Logic: should call putContents for an "update" item', async () => {
       let putContentsCalled = false;
       const queueItem = { id: 1, action: 'update', payload: { title: 'existing.mmd', content: 'updated', sha: 'old-sha' } };
       storageConcept.actions.getSyncQueueItems = () => Promise.resolve([queueItem]);
@@ -155,7 +155,7 @@ describe('Sync Concept', () => {
       assert.isTrue(putContentsCalled, 'gitAbstractionConcept.putContents should have been called');
     });
 
-    it('[UNIT] Push Logic: should call deleteContents for a "delete" item', async () => {
+    test('[UNIT] Push Logic: should call deleteContents for a "delete" item', async () => {
       let deleteContentsCalled = false;
       const queueItem = { id: 1, action: 'delete', payload: { title: 'deleted.mmd', sha: 'old-sha' } };
       storageConcept.actions.getSyncQueueItems = () => Promise.resolve([queueItem]);
@@ -172,7 +172,7 @@ describe('Sync Concept', () => {
       assert.isTrue(deleteContentsCalled, 'gitAbstractionConcept.deleteContents should have been called');
     });
 
-    it('[UNIT] Push Logic: should call delete and put for a "rename" item', async () => {
+    test('[UNIT] Push Logic: should call delete and put for a "rename" item', async () => {
       let deleteCalled = false;
       let createCalled = false;
       const queueItem = { id: 1, action: 'rename', payload: { oldTitle: 'old.mmd', newTitle: 'new.mmd', content: 'content', sha: 'old-sha' } };
@@ -197,7 +197,7 @@ describe('Sync Concept', () => {
   });
 
   describe('Conflict Resolution', () => {
-    it('[UNIT] Conflict Resolution - Remote Wins: should overwrite local content with remote content', async () => {
+    test('[UNIT] Conflict Resolution - Remote Wins: should overwrite local content with remote content', async () => {
       let updateDiagramCalledWith = null;
 
       // Arrange: Simulate a scenario where the remote has changed since the last sync.

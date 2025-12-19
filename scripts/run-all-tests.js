@@ -6,11 +6,11 @@
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL, fileURLToPath } from 'url';
-import TestRunner from '../tests/framework/test-runner.js';
+import TestRunner from '../unit-tests/framework/test-runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const testDir = path.join(__dirname, '..', 'tests');
+const testDir = path.join(__dirname, '..', 'unit-tests');
 
 /**
  * Recursively finds all files ending with .test.js in a directory.

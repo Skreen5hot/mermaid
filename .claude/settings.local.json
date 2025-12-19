@@ -11,7 +11,8 @@
       "Bash(node:*)",
       "Bash(timeout 60 node:*)",
       "Bash(ls:*)",
-      "Bash(timeout 30 node:*)"
+      "Bash(timeout 30 node:*)",
+      "Bash(Get-ExecutionPolicy -Scope CurrentUser)"
     ]
   }
 }

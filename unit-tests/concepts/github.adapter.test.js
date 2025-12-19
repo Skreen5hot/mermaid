@@ -1,4 +1,4 @@
-import { describe, it, assert, beforeEach } from '../test-utils.js';
+import { describe, test, assert, beforeEach } from '../test-utils.js';
 import { githubAdapter } from '../../src/github.js';
 
 describe('GitHub Adapter', () => {
@@ -31,7 +31,7 @@ describe('GitHub Adapter', () => {
   const token = 'ghp_fake-token';
 
   describe('getTreeSha', () => {
-    it('should make multiple API calls to find the correct tree SHA', async () => {
+    test('should make multiple API calls to find the correct tree SHA', async () => {
       // Mock the three fetch calls required by the method
       global.fetch = async (url) => {
         fetchSpy.calls.push({ url });
@@ -67,7 +67,7 @@ describe('GitHub Adapter', () => {
   });
 
   describe('Error Handling', () => {
-    it('[UNIT] should provide a helpful error message on a 403 Forbidden error', async () => {
+    test('[UNIT] should provide a helpful error message on a 403 Forbidden error', async () => {
       // Mock a 403 response with the X-OAuth-Scopes header
       fetchSpy.mock({ message: 'Forbidden' }, false);
       fetchSpy.calls = []; // Reset calls for this specific test
@@ -96,7 +96,7 @@ describe('GitHub Adapter', () => {
   });
 
   describe('Rate Limit Handling', () => {
-    it('[UNIT] should retry with exponential backoff on a 403 error', async () => {
+    test('[UNIT] should retry with exponential backoff on a 403 error', async () => {
       let callCount = 0;
       global.fetch = async (url, options) => {
         callCount++;
@@ -115,7 +115,7 @@ describe('GitHub Adapter', () => {
       tearDown();
     });
 
-    it('[UNIT] should respect the Retry-After header', async () => {
+    test('[UNIT] should respect the Retry-After header', async () => {
       let callCount = 0;
       global.fetch = async (url, options) => {
         callCount++;
