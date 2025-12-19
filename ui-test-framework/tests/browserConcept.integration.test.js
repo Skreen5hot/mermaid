@@ -57,7 +57,9 @@ async function ensureCleanState() {
   }
 
   // Extra safety delay for port cleanup (OS needs time to release the port)
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  // CI environments need more time due to slower I/O and resource constraints
+  const cleanupDelay = process.env.CI ? 3000 : 1500;
+  await new Promise(resolve => setTimeout(resolve, cleanupDelay));
 }
 
 test('browser lifecycle - launch and close', async (t) => {
