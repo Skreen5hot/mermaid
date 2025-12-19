@@ -19,7 +19,9 @@
       "Bash(tasklist:*)",
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
-      "Bash(powershell \"Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ''*--remote-debugging-port*'' } | Select-Object Id, CommandLine | Format-List\")"
+      "Bash(powershell \"Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ''*--remote-debugging-port*'' } | Select-Object Id, CommandLine | Format-List\")",
+      "Bash(set CI=true)",
+      "Bash(CI=true npm test)"
     ]
   }
 }
