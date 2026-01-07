@@ -21,7 +21,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # Fast feedback: Unit tests
       - name: Run unit tests
@@ -102,7 +102,7 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # Prepare combined deployment directory
       - name: Prepare deployment structure
@@ -126,7 +126,7 @@ jobs:
             # Build main branch for root path
             git fetch origin main
             git checkout origin/main
-            npm install
+            npm ci
 
             # Check if build script exists on main, otherwise build manually
             if npm run | grep -q "build"; then
@@ -139,7 +139,7 @@ jobs:
 
             # Build dev branch for /dev/ path
             git checkout -
-            npm install
+            npm ci
 
             # Check if build script exists on dev
             if npm run | grep -q "build"; then
