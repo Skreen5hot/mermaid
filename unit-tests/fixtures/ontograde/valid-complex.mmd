@@ -1,0 +1,10 @@
+graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+Process_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+ICE_0["PersonName<br>IRI: cco:PersonName"]
+IBE_0["TextDocument<br>IRI: cco:TextDocument"]
+Person_0 -->|is_bearer_of| Role_0
+Process_0 -->|realizes| Role_0
+Person_0 -->|is_designated_by| ICE_0
+ICE_0 -->|is_concretized_by| IBE_0

@@ -1,0 +1,246 @@
+import { describe, test, assert, beforeEach } from '../../test-utils.js';
+import { mermaidLifter } from '../../../src/concepts/ontograde/mermaidLifter.js';
+
+describe('Mermaid Lifter Concept', () => {
+
+  beforeEach(() => {
+    // Clear state
+    mermaidLifter.state.rdfGraphs.clear();
+    mermaidLifter.state.errors.clear();
+  });
+
+  test('should have default empty state', () => {
+    assert.strictEqual(mermaidLifter.state.rdfGraphs.size, 0);
+    assert.strictEqual(mermaidLifter.state.errors.size, 0);
+  });
+
+  test('expandIRI should expand known prefixes', () => {
+    const expanded = mermaidLifter.helpers.expandIRI('cco:Person');
+    assert.strictEqual(expanded, 'http://www.ontologyrepository.com/CommonCoreOntologies/Person');
+  });
+
+  test('expandIRI should expand bfo prefixes', () => {
+    const expanded = mermaidLifter.helpers.expandIRI('bfo:Entity');
+    assert.strictEqual(expanded, 'http://purl.obolibrary.org/obo/Entity');
+  });
+
+  test('expandIRI should return unknown prefixes as-is', () => {
+    const expanded = mermaidLifter.helpers.expandIRI('unknown:Something');
+    assert.strictEqual(expanded, 'unknown:Something');
+  });
+
+  test('liftToRDF should parse valid Mermaid with nodes', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    assert.ok(store.size > 0, 'Store should contain triples');
+
+    // Check that Person_0 exists with correct type
+    const personQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/Person'
+    );
+    assert.strictEqual(personQuads.length, 1, 'Person_0 should be typed as cco:Person');
+  });
+
+  test('liftToRDF should parse edges correctly', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+Person_0 -->|is_bearer_of| Role_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const bearerQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of',
+      'http://example.org/Role_0'
+    );
+    assert.strictEqual(bearerQuads.length, 1, 'Should have is_bearer_of relationship');
+  });
+
+  test('liftToRDF should handle nodes without explicit IRI', () => {
+    const mermaid = `graph TD
+Person_0["Person"]`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    assert.ok(store.size > 0, 'Store should contain triples');
+
+    // Should use default ex: namespace
+    const personQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      null
+    );
+    assert.strictEqual(personQuads.length, 1, 'Person_0 should have a type');
+  });
+
+  test('liftToRDF should add rdfs:label for nodes', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const labelQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.w3.org/2000/01/rdf-schema#label',
+      null
+    );
+    assert.strictEqual(labelQuads.length, 1, 'Should have label');
+    assert.strictEqual(labelQuads[0].object.value, 'Person', 'Label should be "Person"');
+  });
+
+  test('liftToRDF should throw error for empty diagram', () => {
+    assert.throws(
+      () => mermaidLifter.helpers.liftToRDF('graph TD\n'),
+      /No valid nodes or edges/,
+      'Should throw error for empty diagram'
+    );
+  });
+
+  test('liftToRDF should throw error for completely empty input', () => {
+    assert.throws(
+      () => mermaidLifter.helpers.liftToRDF(''),
+      /No valid nodes or edges/,
+      'Should throw error for empty input'
+    );
+  });
+
+  test('liftToRDF should handle graph direction variants', () => {
+    const variants = ['graph TD', 'graph LR', 'graph TB', 'graph RL', 'graph BT'];
+
+    for (const variant of variants) {
+      const mermaid = `${variant}
+Person_0["Person<br>IRI: cco:Person"]`;
+
+      const store = mermaidLifter.helpers.liftToRDF(mermaid);
+      assert.ok(store.size > 0, `Should parse ${variant} variant`);
+    }
+  });
+
+  test('liftDiagram action should emit diagramLifted on success', () => {
+    const received = [];
+    mermaidLifter.subscribe((event, payload) => received.push({ event, payload }));
+
+    const validMermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]`;
+
+    mermaidLifter.actions.liftDiagram({
+      diagramId: 'test-1',
+      mermaidText: validMermaid,
+    });
+
+    const liftedEvent = received.find(r => r.event === 'diagramLifted');
+    assert.ok(liftedEvent, 'Should emit diagramLifted event');
+    assert.strictEqual(liftedEvent.payload.diagramId, 'test-1');
+    assert.ok(liftedEvent.payload.rdfGraph, 'Payload should contain RDF graph');
+  });
+
+  test('liftDiagram action should emit liftingFailed on error', () => {
+    const received = [];
+    mermaidLifter.subscribe((event, payload) => received.push({ event, payload }));
+
+    mermaidLifter.actions.liftDiagram({
+      diagramId: 'test-2',
+      mermaidText: 'graph TD\n', // Empty diagram
+    });
+
+    const failedEvent = received.find(r => r.event === 'liftingFailed');
+    assert.ok(failedEvent, 'Should emit liftingFailed event');
+    assert.strictEqual(failedEvent.payload.diagramId, 'test-2');
+    assert.ok(failedEvent.payload.error, 'Payload should contain error');
+    assert.strictEqual(failedEvent.payload.error.type, 'PARSE_ERROR');
+  });
+
+  test('liftDiagram should store RDF graph in state on success', () => {
+    const validMermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]`;
+
+    mermaidLifter.actions.liftDiagram({
+      diagramId: 'test-3',
+      mermaidText: validMermaid,
+    });
+
+    assert.ok(mermaidLifter.state.rdfGraphs.has('test-3'), 'Should store graph in state');
+    assert.strictEqual(mermaidLifter.state.errors.has('test-3'), false, 'Should not have error');
+  });
+
+  test('liftDiagram should store error in state on failure', () => {
+    mermaidLifter.actions.liftDiagram({
+      diagramId: 'test-4',
+      mermaidText: '',
+    });
+
+    assert.strictEqual(mermaidLifter.state.rdfGraphs.has('test-4'), false, 'Should not store graph');
+    assert.ok(mermaidLifter.state.errors.has('test-4'), 'Should have error in state');
+
+    const error = mermaidLifter.state.errors.get('test-4');
+    assert.strictEqual(error.type, 'PARSE_ERROR');
+    assert.ok(error.userMessage, 'Should have user-friendly message');
+  });
+
+  test('liftDiagram should emit largeGraphWarning for diagrams >100 nodes', () => {
+    const received = [];
+    mermaidLifter.subscribe((event, payload) => received.push({ event, payload }));
+
+    // Create a diagram with >100 nodes
+    let largeDiagram = 'graph TD\n';
+    for (let i = 0; i < 101; i++) {
+      largeDiagram += `Node_${i}["Node${i}<br>IRI: ex:Node${i}"]\n`;
+    }
+
+    mermaidLifter.actions.liftDiagram({
+      diagramId: 'test-large',
+      mermaidText: largeDiagram,
+    });
+
+    const warningEvent = received.find(r => r.event === 'largeGraphWarning');
+    assert.ok(warningEvent, 'Should emit largeGraphWarning event');
+    assert.strictEqual(warningEvent.payload.diagramId, 'test-large');
+    assert.ok(warningEvent.payload.nodeCount > 100, 'Should report correct node count');
+  });
+
+  test('getUserFriendlyMessage should return appropriate messages', () => {
+    const parseError = new Error('syntax error');
+    const parseMsg = mermaidLifter.helpers.getUserFriendlyMessage('PARSE_ERROR', parseError);
+    assert.ok(parseMsg.includes('Invalid Mermaid syntax'), 'Should return parse error message');
+
+    const unknownError = new Error('something went wrong');
+    const unknownMsg = mermaidLifter.helpers.getUserFriendlyMessage('UNKNOWN_ERROR', unknownError);
+    assert.ok(unknownMsg.includes('unexpected error'), 'Should return generic error message');
+  });
+
+  test('liftToRDF should handle complex diagrams with multiple edges', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+Process_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+Person_0 -->|is_bearer_of| Role_0
+Process_0 -->|realizes| Role_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Should have 3 nodes (each with type and label = 6 triples) + 2 edges = 8 triples
+    assert.ok(store.size >= 8, 'Should have at least 8 triples');
+
+    // Verify both edges exist
+    const bearer = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of',
+      'http://example.org/Role_0'
+    );
+    assert.strictEqual(bearer.length, 1, 'Should have is_bearer_of edge');
+
+    const realizes = store.getQuads(
+      'http://example.org/Process_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/realizes',
+      'http://example.org/Role_0'
+    );
+    assert.strictEqual(realizes.length, 1, 'Should have realizes edge');
+  });
+});

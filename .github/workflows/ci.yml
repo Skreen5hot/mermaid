@@ -120,6 +120,10 @@ jobs:
               mkdir -p dist && cp -r index.html styles src dist/
             fi
             cp -r dist/* _site/
+
+            # Copy node_modules for ES6 module dependencies (n3, etc.)
+            echo "📦 Copying node_modules for browser imports..."
+            cp -r node_modules _site/
           else
             echo "📦 Deploying DEV to /dev/ path"
 
@@ -137,6 +141,10 @@ jobs:
             fi
             cp -r dist/* _site/
 
+            # Copy node_modules for main branch
+            echo "📦 Copying node_modules for main branch..."
+            cp -r node_modules _site/
+
             # Build dev branch for /dev/ path
             git checkout -f -
             npm ci
@@ -150,6 +158,10 @@ jobs:
             fi
             mkdir -p _site/dev
             cp -r dist/* _site/dev/
+
+            # Copy node_modules for dev branch
+            echo "📦 Copying node_modules for dev branch..."
+            cp -r node_modules _site/dev/
 
             # Add base tag to dev index.html for proper path resolution
             # Extract repository name from GitHub context

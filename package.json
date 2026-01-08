@@ -10,12 +10,15 @@
     "test:all": "npm test && npm run test:ui",
     "security-check": "npm audit --audit-level=high",
     "prepare": "husky",
-    "build": "mkdir -p dist && cp -r index.html styles src dist/"
+    "build": "node build.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "husky": "^9.1.7"
+  },
+  "dependencies": {
+    "n3": "^2.0.0"
   }
 }
