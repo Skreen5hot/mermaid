@@ -22,11 +22,11 @@ if (fs.existsSync(distDir)) {
 fs.mkdirSync(distDir);
 
 // Copy files
+// Note: node_modules NOT included - using CDN for n3 library
 const itemsToCopy = [
   'index.html',
   'styles',
-  'src',
-  'node_modules'
+  'src'
 ];
 
 console.log('📦 Copying files to dist/...');
