@@ -5,6 +5,7 @@
 
 import { Parser, Store, DataFactory } from 'n3';
 import { BFO_CORE, BFO_LABELS, getBFOIri } from '../../ontologies/bfo-core.ttl.js';
+import { CCO_BFO_MAPPING } from '../../ontologies/cco-bfo-mapping.ttl.js';
 
 const { namedNode } = DataFactory;
 
@@ -39,16 +40,23 @@ export const bfoValidator = {
         const startTime = Date.now();
 
         const parser = new Parser();
-        const quads = parser.parse(BFO_CORE);
+
+        // Parse BFO core
+        const bfoQuads = parser.parse(BFO_CORE);
+
+        // Parse CCO-BFO mapping (Iteration 2: temporary until full CCO extraction)
+        const ccoQuads = parser.parse(CCO_BFO_MAPPING);
 
         bfoValidator.state.referenceStore = new Store();
-        bfoValidator.state.referenceStore.addQuads(quads);
+        bfoValidator.state.referenceStore.addQuads(bfoQuads);
+        bfoValidator.state.referenceStore.addQuads(ccoQuads);
         bfoValidator.state.initialized = true;
 
         const elapsed = Date.now() - startTime;
-        console.log(`[bfoValidator] Loaded ${quads.length} BFO triples in ${elapsed}ms`);
+        const totalTriples = bfoQuads.length + ccoQuads.length;
+        console.log(`[bfoValidator] Loaded ${bfoQuads.length} BFO triples + ${ccoQuads.length} CCO mappings in ${elapsed}ms`);
 
-        notify('bfoInitialized', { tripleCount: quads.length, elapsed });
+        notify('bfoInitialized', { tripleCount: totalTriples, elapsed });
       } catch (error) {
         console.error('[bfoValidator] Initialization failed:', error);
         notify('bfoInitializationFailed', { error });
