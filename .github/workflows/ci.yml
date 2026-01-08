@@ -126,7 +126,7 @@ jobs:
             # Build main branch for root path
             git fetch origin main
             git checkout origin/main
-            npm ci
+            npm install
 
             # Check if build script exists on main, otherwise build manually
             if npm run | grep -q "build"; then
@@ -138,7 +138,7 @@ jobs:
             cp -r dist/* _site/
 
             # Build dev branch for /dev/ path
-            git checkout -
+            git checkout -f -
             npm ci
 
             # Check if build script exists on dev
