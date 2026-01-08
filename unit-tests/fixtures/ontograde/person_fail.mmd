@@ -1,0 +1,71 @@
+graph TD
+
+%% =========================
+%% Real Entities (Independent Continuants)
+%% =========================
+Person_0["Person<br>IRI: cco:Person"]
+House_0["House<br>IRI: cco:House"]
+
+%% =========================
+%% Realizable Entities (Dependent Continuants)
+%% =========================
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+
+%% =========================
+%% Processes (Occurrents)
+%% =========================
+Occupancy_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+Interval_0["TemporalInterval<br>IRI: bfo:TemporalInterval"]
+
+%% =========================
+%% Information Artifacts (ICE -> IBE)
+%% =========================
+Name_ICE["PersonName<br>IRI: cco:PersonName"]
+Name_IBE["PersonNameRecord<br>IRI: cco:PersonNameRecord"]
+
+Addr_ICE["PostalAddress<br>IRI: cco:PostalAddress"]
+Addr_IBE["PostalAddressRecord<br>IRI: cco:PostalAddressRecord"]
+
+%% =========================
+%% ORPHAN CLASS (will fail BFO rooting in Iteration 2)
+%% =========================
+CustomThing_0["MyCustomThing<br>IRI: ex:MyCustomThing"]
+
+%% =========================
+%% Formal BFO/CCO Relations WITH ERRORS
+%% =========================
+
+%% ERROR 1: Wrong predicate for Role Pattern
+%% Should be: Person_0 -->|is_bearer_of| Role_0
+Person_0 -->|has_role| Role_0
+
+%% ERROR 2: Missing realization link
+%% Should have: Occupancy_0 -->|realizes| Role_0
+%% (commented out to show missing pattern)
+
+Occupancy_0 -->|has_site| House_0
+Occupancy_0 -->|occupies_temporal_region| Interval_0
+
+%% ERROR 3: Wrong predicate for designation
+%% Should be: Person_0 -->|is_designated_by| Name_ICE
+Person_0 -->|has_name| Name_ICE
+House_0 -->|is_designated_by| Addr_ICE
+
+%% ERROR 4: Wrong predicate in Information Staircase
+%% Should be: Name_ICE -->|is_concretized_by| Name_IBE
+Name_ICE -->|inheres_in| Name_IBE
+Name_IBE -->|has_text_value| Name_Lit["xsd:string"]
+
+%% ERROR 5: Missing concretization link
+%% Should have: Addr_ICE -->|is_concretized_by| Addr_IBE
+%% (commented out to show missing pattern)
+
+Addr_IBE -->|has_text_value| Addr_Lit["xsd:string"]
+
+%% ERROR 6: Missing inverse designation link
+%% Should have: Name_ICE -->|designates| Person_0
+%% Should have: Addr_ICE -->|designates| House_0
+%% (both missing)
+
+%% ERROR 7: Orphan entity has no valid relations
+CustomThing_0 -->|related_to| Person_0

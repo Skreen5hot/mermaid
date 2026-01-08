@@ -1,0 +1,29 @@
+# OntoGrade Ontologies .gitignore
+
+# Strategy: Include ALL files for reproducibility
+
+# INCLUDE: Source ontologies
+!bfo-core.ttl
+!MergedAllCoreOntology-v1.5-2024-02-14.ttl
+!*.ttl
+!iri-mapping-v2.0.csv
+
+# INCLUDE: Extracted subsets (generated in Iteration 2+)
+!bfo-core.ttl.js
+!cco-subset.ttl.js
+!cco-iri-mapping.js
+
+# INCLUDE: Documentation
+!README.md
+!INVENTORY.md
+!.gitignore
+
+# EXCLUDE: Generated checksum file (can be regenerated)
+checksums.txt
+
+# Rationale for including source files:
+# ✅ Reproducibility: Exact versions we validated against
+# ✅ Offline development: No need to re-download
+# ✅ Documentation: Source of truth
+# ✅ Size acceptable: ~3MB total for critical reference data
+# ✅ License compliance: Can redistribute under CC-BY and BSD-3

@@ -1,0 +1,52 @@
+graph TD
+
+%% =========================
+%% Real Entities (Independent Continuants)
+%% =========================
+Person_0["Person<br>IRI: cco:Person"]
+House_0["House<br>IRI: cco:House"]
+
+%% =========================
+%% Realizable Entities (Dependent Continuants)
+%% =========================
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+
+%% =========================
+%% Processes (Occurrents)
+%% =========================
+Occupancy_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+Interval_0["TemporalInterval<br>IRI: bfo:TemporalInterval"]
+
+%% =========================
+%% Information Artifacts (ICE -> IBE)
+%% =========================
+Name_ICE["PersonName<br>IRI: cco:PersonName"]
+Name_IBE["PersonNameRecord<br>IRI: cco:PersonNameRecord"]
+
+Addr_ICE["PostalAddress<br>IRI: cco:PostalAddress"]
+Addr_IBE["PostalAddressRecord<br>IRI: cco:PostalAddressRecord"]
+
+%% =========================
+%% Formal BFO/CCO Relations
+%% =========================
+
+%% The Role Pattern (CORRECT)
+Person_0 -->|is_bearer_of| Role_0
+Occupancy_0 -->|realizes| Role_0
+Occupancy_0 -->|has_site| House_0
+Occupancy_0 -->|occupies_temporal_region| Interval_0
+
+%% The Designation Pattern (CORRECT)
+Person_0 -->|is_designated_by| Name_ICE
+House_0 -->|is_designated_by| Addr_ICE
+
+%% The CCO Information Staircase (CORRECT)
+Name_ICE -->|is_concretized_by| Name_IBE
+Name_IBE -->|has_text_value| Name_Lit["xsd:string"]
+
+Addr_ICE -->|is_concretized_by| Addr_IBE
+Addr_IBE -->|has_text_value| Addr_Lit["xsd:string"]
+
+%% Inverse for Querying (CORRECT)
+Name_ICE -->|designates| Person_0
+Addr_ICE -->|designates| House_0

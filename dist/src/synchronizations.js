@@ -16,6 +16,7 @@ import { syncService } from './concepts/syncService.js';
 import { diagramConcept } from './concepts/diagramConcept.js';
 import { uiConcept } from './concepts/uiConcept.js';
 import { mermaidLifter } from './concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from './concepts/ontograde/bfoValidator.js';
 
 /**
  * A list of declarative rules that define how concepts interact.
@@ -1043,7 +1044,7 @@ export const synchronizations = [
     },
   },
 
-  // OntoGrade: Handle successful lifting (Iteration 1 - just log for now)
+  // OntoGrade: Handle successful lifting → trigger BFO validation (Iteration 2)
   {
     when: 'diagramLifted',
     from: mermaidLifter,
@@ -1051,12 +1052,58 @@ export const synchronizations = [
       console.log(`[Sync] Diagram lifted successfully: ${diagramId}`);
       console.log(`[Sync] RDF Graph size: ${rdfGraph.size} triples`);
 
-      // For Iteration 1, just show success notification
-      // In later iterations, this will trigger validators
+      // Iteration 2: Trigger BFO rooting validation
+      if (bfoValidator.state.initialized) {
+        bfoValidator.actions.validateRooting({ diagramId, rdfGraph });
+      } else {
+        console.warn('[Sync] BFO validator not initialized, skipping validation');
+        uiConcept.actions.showNotification({
+          message: `OntoGrade: Diagram parsed successfully. Found ${rdfGraph.size} RDF triples.`,
+          type: 'success',
+          duration: 5000
+        });
+      }
+    },
+  },
+
+  // OntoGrade: Handle BFO validation success (Iteration 2)
+  {
+    when: 'rootingValidated',
+    from: bfoValidator,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] BFO rooting validation complete for ${diagramId}`);
+
+      if (result.pass) {
+        uiConcept.actions.showNotification({
+          message: `✅ OntoGrade: All ${result.totalClasses} classes properly rooted in BFO`,
+          type: 'success',
+          duration: 5000
+        });
+      } else {
+        const orphanList = result.orphans
+          .map(iri => bfoValidator.helpers.getClassLabel(iri))
+          .join(', ');
+
+        uiConcept.actions.showNotification({
+          message: `⚠️ OntoGrade: ${result.orphanClasses} orphan class(es): ${orphanList}`,
+          type: 'warning',
+          duration: 7000
+        });
+      }
+    },
+  },
+
+  // OntoGrade: Handle BFO validation failure
+  {
+    when: 'rootingValidationFailed',
+    from: bfoValidator,
+    do: ({ diagramId, error }) => {
+      console.error(`[Sync] BFO validation failed for ${diagramId}:`, error);
+
       uiConcept.actions.showNotification({
-        message: `OntoGrade: Diagram parsed successfully. Found ${rdfGraph.size} RDF triples.`,
-        type: 'success',
-        duration: 5000
+        message: `OntoGrade Error: ${error.userMessage || error.error || 'Validation failed'}`,
+        type: 'error',
+        duration: 7000
       });
     },
   },
@@ -1110,6 +1157,20 @@ export function initializeApp() {
     alert(`Critical Error: Failed to initialize application.\n\n${error.message}\n\nPlease refresh the page.`);
     return;
   }
+
+  // Initialize BFO validator for OntoGrade (Iteration 2)
+  bfoValidator.actions.initialize()
+    .then(() => {
+      console.log('[App] BFO validator initialized successfully');
+    })
+    .catch((error) => {
+      console.error('[App] Failed to initialize BFO validator:', error);
+      uiConcept.actions.showNotification({
+        message: 'OntoGrade validation may not be available',
+        type: 'warning',
+        duration: 5000
+      });
+    });
 
   storageConcept.actions.init()
     .then(() => {

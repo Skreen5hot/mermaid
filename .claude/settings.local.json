@@ -25,7 +25,8 @@
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "Bash(test:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(grep:*)"
     ]
   }
 }
