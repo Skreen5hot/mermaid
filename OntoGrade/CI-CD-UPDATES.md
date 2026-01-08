@@ -5,7 +5,9 @@
 
 ---
 
-## Problem Identified
+## Problems Identified
+
+### Problem 1: Missing node_modules
 
 The OntoGrade module uses ES6 imports to load the `n3` library:
 
@@ -14,6 +16,17 @@ import { Parser, Store, Writer, DataFactory } from 'n3';
 ```
 
 The browser resolves this as a bare module specifier, which requires the `node_modules` directory to be present in the deployed site. The original build script **did not include `node_modules`**, causing import failures in production.
+
+### Problem 2: Bare Module Specifier Resolution
+
+Even with node_modules deployed, browsers cannot resolve bare specifiers like `'n3'` without help. The error was:
+
+```
+Uncaught TypeError: Failed to resolve module specifier "n3".
+Relative references must start with either "/", "./", or "../".
+```
+
+**Solution:** Use an **Import Map** to tell the browser where to find `n3`.
 
 ---
 
@@ -66,6 +79,22 @@ cp -r node_modules _site/
 echo "📦 Copying node_modules for dev branch..."
 cp -r node_modules _site/dev/
 ```
+
+### 4. Added Import Map ([index.html](../index.html#L8-15))
+
+**Critical fix** for bare module specifier resolution:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "n3": "./node_modules/n3/src/index.js"
+  }
+}
+</script>
+```
+
+This must be placed in `<head>` **before** any module scripts. It maps the bare specifier `'n3'` to the actual ES6 module path.
 
 ---
 
@@ -121,22 +150,38 @@ mermaidLifter.js  ✓
 
 ## Import Resolution in Browser
 
-With node_modules deployed, the browser can now resolve:
+### Import Map Configuration
+
+Added to [index.html](../index.html#L9-15) to resolve bare module specifiers:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "n3": "./node_modules/n3/src/index.js"
+  }
+}
+</script>
+```
+
+This tells the browser how to resolve:
 
 ```javascript
 // In src/concepts/ontograde/mermaidLifter.js
 import { Parser, Store, Writer, DataFactory } from 'n3';
 ```
 
-Resolves to:
-```
-https://<username>.github.io/<repo>/node_modules/n3/...
-```
+**Resolution flow:**
+1. Browser encounters `from 'n3'`
+2. Checks import map: `n3` → `./node_modules/n3/src/index.js`
+3. Loads ES6 module from `node_modules/n3/src/index.js`
+4. Follows internal imports within n3 package
 
-The browser follows Node.js ES module resolution:
-1. Looks for `node_modules/n3/package.json`
-2. Reads `"exports"` or `"module"` field
-3. Loads the appropriate ES6 module file
+**Why `src/index.js` instead of `browser/n3.min.js`?**
+- `browser/n3.min.js` is a UMD bundle (not ES6 modules)
+- `src/index.js` is the ES6 module entry point (from `package.json` "module" field)
+- Modern browsers support ES6 imports natively
+- No adapter/shim needed
 
 ---
 
