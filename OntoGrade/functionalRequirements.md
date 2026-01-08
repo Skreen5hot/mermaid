@@ -1,32 +1,32 @@
-# **OntoGrade Functional Requirements Document (FRD) v2.0**
+# **OntoGrade Client-Side Add-on Functional Requirements (FRD) v2.1**
 
-**Product:** OntoGrade – Deterministic Ontology Evaluation Service
+**Product:** OntoGrade – Client-Side Deterministic Ontology Evaluation Module
 **Author:** Aaron Damiano
-**Date:** January 7, 2026
-**Version:** 2.0
+**Date:** January 8, 2026
+**Version:** 2.1
 
 ---
 
 ## 1. Product Overview
 
-**OntoGrade** is a deterministic validation service that evaluates knowledge models against **Basic Formal Ontology (BFO)** and **Common Core Ontologies (CCO)**. It ingests RDF-based models (or lifted representations from diagrams like Mermaid.js) and outputs a weighted **Ontological Quality Score**, reflecting:
+**OntoGrade** is a client-side JavaScript module integrated into the Mermaid IDE that evaluates knowledge models against **Basic Formal Ontology (BFO)** and **Common Core Ontologies (CCO)** directly in the browser. It parses the active Mermaid diagram, lifts it to RDF, and outputs a weighted **Ontological Quality Score**, reflecting:
 
 * **BFO compliance** (structural correctness)
 * **Logical integrity** (reasoning consistency)
 * **CCO best practices** (pattern adherence)
 
-The service provides **developer-friendly error logs**, **JSON-LD reports**, and **recommendations for remediation**.
+The module provides **real-time developer feedback**, **JSON-LD reports**, and **recommendations for remediation** without sending data to a remote server.
 
 ---
 
 ## 2. Functional Requirements
 
-### FR-1: Model Ingestion & Lifting
+### FR-1: Client-Side Ingestion & Lifting
 
-The system shall ingest knowledge models and normalize them into an RDF graph.
+The system shall ingest the active Mermaid diagram text from the IDE state and normalize it into an in-memory RDF graph.
 
-* **FR-1.1:** Support `.ttl` (Turtle), `.rdf` (RDF/XML), and `.json-ld`.
-* **FR-1.2: Mermaid.js Lifting** – Convert Mermaid diagrams into RDF triples according to these standards:
+* **FR-1.1:** Parse Mermaid syntax directly in the browser using JavaScript. Verify diagram conforms to OntoGrade conventions before execution.
+* **FR-1.2: Mermaid.js Lifting** – Convert Mermaid nodes and edges into RDF triples (N3/Turtle format) in memory:
 
   **Mermaid Node Conventions:**
 
@@ -59,9 +59,9 @@ The system shall ingest knowledge models and normalize them into an RDF graph.
 
 ### FR-2: Structural Alignment (BFO Rooting)
 
-The system shall verify that **all user-defined classes** are rooted in BFO.
+The system shall verify that **all user-defined classes** are rooted in BFO using an in-memory RDF store (e.g., N3.js or Oxigraph).
 
-* **FR-2.1:** Execute SPARQL pathfinding from each class to `bfo:Entity`.
+* **FR-2.1:** Execute SPARQL (or graph traversal) pathfinding from each class to `bfo:Entity`.
 * **FR-2.2:** Detect **orphan classes** with no path to a BFO root.
 * **FR-2.3:** Handle **multi-root and cyclic structures**:
 
@@ -72,7 +72,7 @@ The system shall verify that **all user-defined classes** are rooted in BFO.
 
 ### FR-3: CCO Pattern Validation (SHACL)
 
-The system shall enforce CCO patterns via SHACL:
+The system shall enforce CCO patterns via a JavaScript SHACL validator (e.g., `rdf-validate-shacl`):
 
 * **FR-3.1:** **Information Staircase Pattern**: ICE → `is_concretized_by` → IBE → `has_text_value` → literal
 * **FR-3.2:** **Role Pattern**: Realizable entities must be linked to an independent continuant via `is_bearer_of`.
@@ -82,9 +82,9 @@ The system shall enforce CCO patterns via SHACL:
 
 ---
 
-### FR-4: Logical Integrity (Reasoning)
+### FR-4: Client-Side Logical Integrity (Reasoning)
 
-* **FR-4.1:** Invoke a DL Reasoner (e.g., HermiT) to detect **disjointness violations**.
+* **FR-4.1:** Invoke a lightweight JavaScript or WASM-based Reasoner (e.g., HyLAR or EYE) to detect **disjointness violations**.
 * **FR-4.2:** Flag **type collisions**, e.g., entity inferred as both `BFO:Process` and `BFO:Object`.
 * **FR-4.3:** Partial violations decrement the **Logic Integrity score proportionally**.
 
@@ -203,4 +203,3 @@ ActOfOccupancy_0 -->|realizes| ResidentRole_0
          |
          v
 [Weighted Scoring Engine] ---> [JSON-LD Output]
-
