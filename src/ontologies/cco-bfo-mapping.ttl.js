@@ -22,6 +22,10 @@ cco:Person rdfs:subClassOf bfo:BFO_0000040.  # material entity
 cco:Agent rdfs:subClassOf bfo:BFO_0000040.  # material entity
 cco:Organization rdfs:subClassOf bfo:BFO_0000040.  # material entity
 
+# Built Environment
+cco:House rdfs:subClassOf cco:Facility.
+cco:Building rdfs:subClassOf cco:Facility.
+
 # Roles
 cco:Role rdfs:subClassOf bfo:BFO_0000023.  # role
 cco:ResidentRole rdfs:subClassOf cco:Role.
@@ -34,6 +38,7 @@ cco:DesignativeInformationContentEntity rdfs:subClassOf cco:InformationContentEn
 cco:Name rdfs:subClassOf cco:DesignativeInformationContentEntity.
 cco:PersonName rdfs:subClassOf cco:Name.
 cco:Identifier rdfs:subClassOf cco:DesignativeInformationContentEntity.
+cco:PostalAddress rdfs:subClassOf cco:DesignativeInformationContentEntity.
 
 # Information Bearing Entities
 cco:InformationBearingEntity rdfs:subClassOf bfo:BFO_0000030.  # object
@@ -41,6 +46,7 @@ cco:InformationBearingArtifact rdfs:subClassOf cco:InformationBearingEntity.
 cco:Document rdfs:subClassOf cco:InformationBearingArtifact.
 cco:Record rdfs:subClassOf cco:Document.
 cco:PersonNameRecord rdfs:subClassOf cco:Record.
+cco:PostalAddressRecord rdfs:subClassOf cco:Record.
 
 # Artifacts
 cco:Artifact rdfs:subClassOf bfo:BFO_0000030.  # object
@@ -48,6 +54,7 @@ cco:Artifact rdfs:subClassOf bfo:BFO_0000030.  # object
 # Processes and Acts
 cco:Act rdfs:subClassOf bfo:BFO_0000015.  # process
 cco:IntentionalAct rdfs:subClassOf cco:Act.
+cco:ActOfOccupancy rdfs:subClassOf cco:IntentionalAct.
 
 # Qualities
 cco:Quality rdfs:subClassOf bfo:BFO_0000019.  # quality
@@ -59,6 +66,9 @@ cco:Facility rdfs:subClassOf cco:Site.
 # Dispositions and Functions
 cco:Function rdfs:subClassOf bfo:BFO_0000034.  # function
 cco:Disposition rdfs:subClassOf bfo:BFO_0000016.  # disposition
+
+# BFO Temporal Regions (commonly referenced)
+bfo:TemporalInterval rdfs:subClassOf bfo:BFO_0000038.  # one-dimensional temporal region
 
 # Generic subclasses for common patterns
 # (Add more as needed for test fixtures)

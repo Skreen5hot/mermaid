@@ -5,7 +5,7 @@
  * the essential class hierarchy needed for rooting validation.
  *
  * Source: src/ontologies/bfo-core.ttl
- * Extracted: 2026-01-08
+ * Extracted: 2026-01-09
  * Version: BFO 2020
  * License: CC-BY 4.0
  *
@@ -15,6 +15,7 @@
  *   - BFO_0000003
  *   - BFO_0000004
  *   - BFO_0000006
+ *   - BFO_0000008
  *   - BFO_0000015
  *   - BFO_0000016
  *   - BFO_0000017
@@ -28,6 +29,7 @@
  *   - BFO_0000030
  *   - BFO_0000031
  *   - BFO_0000034
+ *   - BFO_0000038
  *   - BFO_0000040
  *   - BFO_0000141
  *
@@ -79,6 +81,11 @@ bfo:BFO_0000141 a owl:Class;
     rdfs:label "immaterial entity"@en;
     skos:definition "b is an immaterial entity =Def b is an independent continuant which is such that there is no time t when it has a material entity as continuant part"@en;
     rdfs:subClassOf bfo:BFO_0000004.
+bfo:BFO_0000008 a owl:Class;
+    dc11:identifier "100-BFO";
+    rdfs:label "temporal region"@en;
+    skos:definition "(Elucidation) A temporal region is an occurrent over which processes can unfold"@en;
+    rdfs:subClassOf bfo:BFO_0000003, _:n3-93, _:n3-94.
 bfo:BFO_0000015 a owl:Class;
     dc11:identifier "083-BFO";
     rdfs:label "process"@en;
@@ -149,6 +156,11 @@ bfo:BFO_0000034 a owl:Class;
     rdfs:label "function"@en;
     skos:definition "(Elucidation) A function is a disposition that exists in virtue of its bearer's physical make-up & this physical make-up is something the bearer possesses because it came into being either through evolution (in the case of natural biological entities) or through intentional design (in the case of artefacts) in order to realize processes of a certain sort"@en;
     rdfs:subClassOf bfo:BFO_0000016.
+bfo:BFO_0000038 a owl:Class;
+    dc11:identifier "103-BFO";
+    rdfs:label "one-dimensional temporal region"@en;
+    skos:definition "(Elucidation) A one-dimensional temporal region is a temporal region that is a whole that has a temporal interval and zero or more temporal intervals and temporal instants as parts"@en;
+    rdfs:subClassOf bfo:BFO_0000008, _:n3-133, _:n3-137.
 `;
 
 // Class labels for user-friendly messages

@@ -25,6 +25,7 @@ const ESSENTIAL_CLASSES = [
   'BFO_0000003', // occurrent
   'BFO_0000004', // independent continuant
   'BFO_0000006', // spatial region
+  'BFO_0000008', // temporal region
   'BFO_0000015', // process
   'BFO_0000016', // disposition
   'BFO_0000017', // realizable entity
@@ -38,6 +39,7 @@ const ESSENTIAL_CLASSES = [
   'BFO_0000030', // object
   'BFO_0000031', // generically dependent continuant
   'BFO_0000034', // function
+  'BFO_0000038', // one-dimensional temporal region (temporal interval)
   'BFO_0000040', // material entity
   'BFO_0000141', // immaterial entity
 ];
