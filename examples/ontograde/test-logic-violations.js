@@ -12,9 +12,9 @@
  */
 
 import { readFileSync } from 'fs';
-import { mermaidLifter } from './src/concepts/ontograde/mermaidLifter.js';
-import { bfoValidator } from './src/concepts/ontograde/bfoValidator.js';
-import { logicReasoner } from './src/concepts/ontograde/logicReasoner.js';
+import { mermaidLifter } from '../../src/concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from '../../src/concepts/ontograde/bfoValidator.js';
+import { logicReasoner } from '../../src/concepts/ontograde/logicReasoner.js';
 
 await bfoValidator.actions.initialize();
 

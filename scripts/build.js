@@ -12,7 +12,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const distDir = path.join(__dirname, 'dist');
+// Build script is in scripts/, so go up one level to project root
+const projectRoot = path.join(__dirname, '..');
+const distDir = path.join(projectRoot, 'dist');
 
 // Clean dist directory
 console.log('🧹 Cleaning dist directory...');
@@ -32,7 +34,7 @@ const itemsToCopy = [
 console.log('📦 Copying files to dist/...');
 
 for (const item of itemsToCopy) {
-  const src = path.join(__dirname, item);
+  const src = path.join(projectRoot, item);
   const dest = path.join(distDir, item);
 
   if (!fs.existsSync(src)) {

@@ -1,14 +1,14 @@
 import { readFileSync } from 'fs';
-import { mermaidLifter } from './src/concepts/ontograde/mermaidLifter.js';
-import { bfoValidator } from './src/concepts/ontograde/bfoValidator.js';
-import { shaclValidator } from './src/concepts/ontograde/shaclValidator.js';
+import { mermaidLifter } from '../../src/concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from '../../src/concepts/ontograde/bfoValidator.js';
+import { shaclValidator } from '../../src/concepts/ontograde/shaclValidator.js';
 
 await bfoValidator.actions.initialize();
 
 // Clear any previous state
 mermaidLifter.state.rdfGraphs.clear();
 
-const mermaidText = readFileSync('Test Pattern Violations.mmd', 'utf-8');
+const mermaidText = readFileSync('examples/diagrams/pattern-violations.mmd', 'utf-8');
 mermaidLifter.actions.liftDiagram({ diagramId: 'test-patterns', mermaidText });
 const rdfGraph = mermaidLifter.state.rdfGraphs.get('test-patterns');
 

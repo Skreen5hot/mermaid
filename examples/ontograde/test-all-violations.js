@@ -4,12 +4,12 @@
  */
 
 import { readFileSync } from 'fs';
-import { mermaidLifter } from './src/concepts/ontograde/mermaidLifter.js';
-import { bfoValidator } from './src/concepts/ontograde/bfoValidator.js';
-import { shaclValidator } from './src/concepts/ontograde/shaclValidator.js';
-import { logicReasoner } from './src/concepts/ontograde/logicReasoner.js';
-import { gradingEngine } from './src/concepts/ontograde/gradingEngine.js';
-import { reportGenerator } from './src/concepts/ontograde/reportGenerator.js';
+import { mermaidLifter } from '../../src/concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from '../../src/concepts/ontograde/bfoValidator.js';
+import { shaclValidator } from '../../src/concepts/ontograde/shaclValidator.js';
+import { logicReasoner } from '../../src/concepts/ontograde/logicReasoner.js';
+import { gradingEngine } from '../../src/concepts/ontograde/gradingEngine.js';
+import { reportGenerator } from '../../src/concepts/ontograde/reportGenerator.js';
 
 console.log('='.repeat(80));
 console.log('OntoGrade: Comprehensive Violation Testing');
@@ -121,16 +121,16 @@ async function testDiagram(filename, diagramId, expectedViolationType) {
 }
 
 // Test 1: BFO Violations
-const bfoReport = await testDiagram('Test Violations.mmd', 'test-bfo', 'BFO');
+const bfoReport = await testDiagram('examples/diagrams/bfo-violations.mmd', 'test-bfo', 'BFO');
 
 // Test 2: Pattern Violations
-const patternReport = await testDiagram('Test Pattern Violations.mmd', 'test-patterns', 'Pattern');
+const patternReport = await testDiagram('examples/diagrams/pattern-violations.mmd', 'test-patterns', 'Pattern');
 
 // Test 3: Logic Violations
-const logicReport = await testDiagram('Test Logic Violations.mmd', 'test-logic', 'Logic');
+const logicReport = await testDiagram('examples/diagrams/logic-violations.mmd', 'test-logic', 'Logic');
 
 // Test 4: Perfect Score
-const perfectReport = await testDiagram('CCO example.mmd', 'test-perfect', 'None');
+const perfectReport = await testDiagram('examples/diagrams/perfect-score.mmd', 'test-perfect', 'None');
 
 // Summary
 console.log('='.repeat(80));
@@ -165,9 +165,9 @@ console.log();
 console.log('✅ All violation tests completed!');
 console.log();
 console.log('📁 Test Files Available:');
-console.log('   1. Test Violations.mmd          - BFO rooting violations');
-console.log('   2. Test Pattern Violations.mmd  - CCO pattern violations');
-console.log('   3. Test Logic Violations.mmd    - Logical consistency violations');
-console.log('   4. CCO example.mmd              - Perfect score (5.0/5.0)');
+console.log('   1. examples/diagrams/bfo-violations.mmd     - BFO rooting violations');
+console.log('   2. examples/diagrams/pattern-violations.mmd - CCO pattern violations');
+console.log('   3. examples/diagrams/logic-violations.mmd   - Logical consistency violations');
+console.log('   4. examples/diagrams/perfect-score.mmd      - Perfect score (5.0/5.0)');
 console.log();
 console.log('🌐 Load these in the browser at http://localhost:3000 to test the modal UI!');

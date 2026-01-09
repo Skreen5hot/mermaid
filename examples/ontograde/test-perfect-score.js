@@ -4,12 +4,12 @@
  */
 
 import { readFileSync } from 'fs';
-import { mermaidLifter } from './src/concepts/ontograde/mermaidLifter.js';
-import { bfoValidator } from './src/concepts/ontograde/bfoValidator.js';
-import { shaclValidator } from './src/concepts/ontograde/shaclValidator.js';
-import { logicReasoner } from './src/concepts/ontograde/logicReasoner.js';
-import { gradingEngine } from './src/concepts/ontograde/gradingEngine.js';
-import { reportGenerator } from './src/concepts/ontograde/reportGenerator.js';
+import { mermaidLifter } from '../../src/concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from '../../src/concepts/ontograde/bfoValidator.js';
+import { shaclValidator } from '../../src/concepts/ontograde/shaclValidator.js';
+import { logicReasoner } from '../../src/concepts/ontograde/logicReasoner.js';
+import { gradingEngine } from '../../src/concepts/ontograde/gradingEngine.js';
+import { reportGenerator } from '../../src/concepts/ontograde/reportGenerator.js';
 
 console.log('='.repeat(70));
 console.log('OntoGrade Iteration 5: Modal UI Integration Test');
@@ -27,8 +27,8 @@ console.log('TEST 1: Perfect Score Report (5.0/5.0)');
 console.log('='.repeat(70));
 console.log();
 
-const perfectDiagram = readFileSync('CCO example.mmd', 'utf-8');
-console.log(`📄 Loading CCO example.mmd (${perfectDiagram.split('\n').length} lines)`);
+const perfectDiagram = readFileSync('examples/diagrams/perfect-score.mmd', 'utf-8');
+console.log(`📄 Loading examples/diagrams/perfect-score.mmd (${perfectDiagram.split('\n').length} lines)`);
 
 // Lift and validate
 mermaidLifter.actions.liftDiagram({ diagramId: 'test-perfect', mermaidText: perfectDiagram });

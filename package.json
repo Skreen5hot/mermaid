@@ -5,15 +5,15 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node run-tests.js",
+    "test": "node tests/run-tests.js",
     "test:ui": "cd ui-test-framework && npm test",
     "test:all": "npm test && npm run test:ui",
     "security-check": "npm audit --audit-level=high",
     "prepare": "husky",
-    "build": "node build.js",
+    "build": "node scripts/build.js",
     "test:ontograde": "npm run test:ontograde:patterns && npm run test:ontograde:logic",
-    "test:ontograde:patterns": "node test-patterns-fresh.js",
-    "test:ontograde:logic": "node test-logic-violations.js"
+    "test:ontograde:patterns": "node examples/ontograde/test-pattern-violations.js",
+    "test:ontograde:logic": "node examples/ontograde/test-logic-violations.js"
   },
   "keywords": [],
   "author": "",

@@ -4,14 +4,14 @@
  */
 
 import { readFileSync } from 'fs';
-import { mermaidLifter } from './src/concepts/ontograde/mermaidLifter.js';
-import { bfoValidator } from './src/concepts/ontograde/bfoValidator.js';
-import { shaclValidator } from './src/concepts/ontograde/shaclValidator.js';
-import { logicReasoner } from './src/concepts/ontograde/logicReasoner.js';
-import { gradingEngine } from './src/concepts/ontograde/gradingEngine.js';
-import { reportGenerator } from './src/concepts/ontograde/reportGenerator.js';
+import { mermaidLifter } from '../../src/concepts/ontograde/mermaidLifter.js';
+import { bfoValidator } from '../../src/concepts/ontograde/bfoValidator.js';
+import { shaclValidator } from '../../src/concepts/ontograde/shaclValidator.js';
+import { logicReasoner } from '../../src/concepts/ontograde/logicReasoner.js';
+import { gradingEngine } from '../../src/concepts/ontograde/gradingEngine.js';
+import { reportGenerator } from '../../src/concepts/ontograde/reportGenerator.js';
 
-const TEST_DIAGRAM = 'CCO example.mmd';
+const TEST_DIAGRAM = 'examples/diagrams/bfo-violations.mmd';
 
 // Event tracking
 let events = [];
