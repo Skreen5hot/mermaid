@@ -86,9 +86,7 @@ export const bfoValidator = {
         console.log(`  - Total classes: ${result.totalClasses}`);
         console.log(`  - Rooted: ${result.rootedClasses}`);
         console.log(`  - Orphans: ${result.orphanClasses}`);
-        if (result.orphans.length > 0) {
-          console.log(`  - Orphan IRIs:`, result.orphans);
-        }
+        console.log(`  - Orphan IRIs:`, result.orphans);
         console.log(`  - Pass: ${result.pass ? 'YES' : 'NO'}`);
 
         notify('rootingValidated', { diagramId, result });
