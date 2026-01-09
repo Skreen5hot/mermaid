@@ -17,6 +17,8 @@ import { diagramConcept } from './concepts/diagramConcept.js';
 import { uiConcept } from './concepts/uiConcept.js';
 import { mermaidLifter } from './concepts/ontograde/mermaidLifter.js';
 import { bfoValidator } from './concepts/ontograde/bfoValidator.js';
+import { shaclValidator } from './concepts/ontograde/shaclValidator.js';
+import { logicReasoner } from './concepts/ontograde/logicReasoner.js';
 
 /**
  * A list of declarative rules that define how concepts interact.
@@ -1063,6 +1065,12 @@ export const synchronizations = [
           duration: 5000
         });
       }
+
+      // Iteration 3: Trigger CCO pattern validation
+      shaclValidator.actions.validatePatterns({ diagramId, rdfGraph });
+
+      // Iteration 3: Trigger logical consistency checking
+      logicReasoner.actions.checkConsistency({ diagramId, rdfGraph });
     },
   },
 
@@ -1102,6 +1110,92 @@ export const synchronizations = [
 
       uiConcept.actions.showNotification({
         message: `OntoGrade Error: ${error.userMessage || error.error || 'Validation failed'}`,
+        type: 'error',
+        duration: 7000
+      });
+    },
+  },
+
+  // OntoGrade: Handle CCO pattern validation success (Iteration 3)
+  {
+    when: 'patternsValidated',
+    from: shaclValidator,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] CCO pattern validation complete for ${diagramId}`);
+
+      if (result.pass) {
+        uiConcept.actions.showNotification({
+          message: `✅ OntoGrade: All CCO patterns valid (${result.complianceScore}% compliance)`,
+          type: 'success',
+          duration: 5000
+        });
+      } else {
+        const violationSummary = result.violations
+          .map(v => v.pattern)
+          .filter((v, i, a) => a.indexOf(v) === i) // unique
+          .join(', ');
+
+        uiConcept.actions.showNotification({
+          message: `⚠️ OntoGrade: ${result.violations.length} pattern violation(s) in: ${violationSummary}`,
+          type: 'warning',
+          duration: 7000
+        });
+      }
+    },
+  },
+
+  // OntoGrade: Handle CCO pattern validation failure (Iteration 3)
+  {
+    when: 'patternsValidationFailed',
+    from: shaclValidator,
+    do: ({ diagramId, error }) => {
+      console.error(`[Sync] Pattern validation failed for ${diagramId}:`, error);
+
+      uiConcept.actions.showNotification({
+        message: `OntoGrade Error: ${error.userMessage || error.error || 'Pattern validation failed'}`,
+        type: 'error',
+        duration: 7000
+      });
+    },
+  },
+
+  // OntoGrade: Handle logical consistency check success (Iteration 3)
+  {
+    when: 'consistencyChecked',
+    from: logicReasoner,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] Logical consistency check complete for ${diagramId}`);
+
+      if (result.pass) {
+        uiConcept.actions.showNotification({
+          message: `✅ OntoGrade: Model is logically consistent (${result.integrityScore}% integrity)`,
+          type: 'success',
+          duration: 5000
+        });
+      } else {
+        const inconsistencyTypes = result.inconsistencies
+          .map(i => i.type)
+          .filter((v, i, a) => a.indexOf(v) === i) // unique
+          .join(', ');
+
+        uiConcept.actions.showNotification({
+          message: `⚠️ OntoGrade: ${result.inconsistencies.length} logical inconsistency(ies): ${inconsistencyTypes}`,
+          type: 'warning',
+          duration: 7000
+        });
+      }
+    },
+  },
+
+  // OntoGrade: Handle logical consistency check failure (Iteration 3)
+  {
+    when: 'consistencyCheckFailed',
+    from: logicReasoner,
+    do: ({ diagramId, error }) => {
+      console.error(`[Sync] Consistency check failed for ${diagramId}:`, error);
+
+      uiConcept.actions.showNotification({
+        message: `OntoGrade Error: ${error.userMessage || error.error || 'Consistency check failed'}`,
         type: 'error',
         duration: 7000
       });

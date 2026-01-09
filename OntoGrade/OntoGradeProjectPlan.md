@@ -139,7 +139,7 @@ To maintain the **Concepts + Synchronizations** pattern, OntoGrade will be decom
 
 ### Acceptance Criteria
 *   [ ] Clicking "OntoGrade" triggers the entire pipeline.
-*   [ ] Results are displayed in a modal or side panel.
+*   [ ] Results are displayed in a modal.
 *   [ ] User can download the JSON-LD report.
 *   [ ] No page reload occurs; everything is client-side.
 
