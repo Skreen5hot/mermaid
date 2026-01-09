@@ -1,1 +1,8 @@
+# Test results
 unit-test-results.json
+
+# Build artifacts
+dist/
+
+# Dependencies
+node_modules/
