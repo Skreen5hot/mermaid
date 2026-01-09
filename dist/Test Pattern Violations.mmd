@@ -1,0 +1,57 @@
+graph TD
+
+%% =========================
+%% Test diagram with CCO Pattern Violations
+%% All classes properly rooted in BFO
+%% Expected: BFO 100%, Patterns ~40%, Logic 100%
+%% Score: ~3.2/5.0
+%% =========================
+
+%% Valid, properly rooted entities
+Person["Person<br>IRI: cco:Person"]
+Organization["Organization<br>IRI: cco:Organization"]
+Process1["ActOfEmployment<br>IRI: cco:ActOfEmployment"]
+
+%% VIOLATION 1: Role Pattern - Role with bearer but NO realization
+%% EmployeeRole has a bearer but no process realizes it
+EmployeeRole["EmployeeRole<br>IRI: cco:Role"]
+Person -->|is_bearer_of| EmployeeRole
+%% MISSING: Process1 -->|realizes| EmployeeRole
+
+%% VIOLATION 2: Role Pattern - Role with realization but NO bearer
+%% ManagerRole is realized by a process but has no bearer
+ManagerRole["ManagerRole<br>IRI: cco:Role"]
+Process1 -->|realizes| ManagerRole
+%% MISSING: Person -->|is_bearer_of| ManagerRole
+
+%% VIOLATION 3: Information Staircase - ICE without concretization
+%% PersonName is an ICE but lacks is_concretized_by
+PersonName["PersonName<br>IRI: cco:InformationContentEntity"]
+Person -->|is_designated_by| PersonName
+%% MISSING: PersonName -->|is_concretized_by| PersonNameRecord
+
+%% VIOLATION 4: Information Staircase - IBE without text value
+%% OrgNameRecord is an IBE but lacks has_text_value
+OrgName["OrgName<br>IRI: cco:InformationContentEntity"]
+OrgNameRecord["OrgNameRecord<br>IRI: cco:InformationBearingEntity"]
+Organization -->|is_designated_by| OrgName
+OrgName -->|is_concretized_by| OrgNameRecord
+%% MISSING: OrgNameRecord -->|has_text_value| "Some Text"
+
+%% VIOLATION 5: Designation Pattern - DesignativeICE not linked
+%% AddressICE is a DesignativeICE but has no designation links
+AddressICE["PostalAddress<br>IRI: cco:DesignativeInformationContentEntity"]
+%% MISSING: Organization -->|is_designated_by| AddressICE
+
+%% Valid pattern for comparison
+ValidRole["ValidEmployeeRole<br>IRI: cco:Role"]
+ValidProcess["ValidHiringProcess<br>IRI: cco:Process"]
+ValidName["ValidPersonName<br>IRI: cco:InformationContentEntity"]
+ValidRecord["ValidNameRecord<br>IRI: cco:InformationBearingEntity"]
+
+Person -->|is_bearer_of| ValidRole
+ValidProcess -->|realizes| ValidRole
+
+Person -->|is_designated_by| ValidName
+ValidName -->|is_concretized_by| ValidRecord
+ValidRecord -->|has_text_value| "John Doe"

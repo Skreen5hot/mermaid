@@ -26,7 +26,10 @@
       "Bash(npm run build:*)",
       "Bash(test:*)",
       "Bash(cat:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ping:*)",
+      "Bash(npm run test:ontograde:*)",
+      "Bash(del nul)"
     ]
   }
 }

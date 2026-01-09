@@ -167,6 +167,99 @@
     </div>
 </div>
 
+<!-- OntoGrade Report Modal -->
+<div id="ontograde-report-modal" class="modal">
+    <div class="modal-content ontograde-modal-content">
+        <div class="ontograde-header">
+            <h2>🎓 OntoGrade Quality Report</h2>
+            <button id="ontograde-close-btn" class="modal-close-btn">×</button>
+        </div>
+
+        <div class="ontograde-score-display">
+            <div class="score-circle">
+                <span id="ontograde-final-score" class="score-value">-</span>
+                <span class="score-max">/5.0</span>
+            </div>
+            <div id="ontograde-score-label" class="score-label">Calculating...</div>
+        </div>
+
+        <div class="ontograde-summary">
+            <h3>Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">BFO Rooting</span>
+                    <span id="summary-bfo" class="summary-value">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Pattern Adherence</span>
+                    <span id="summary-patterns" class="summary-value">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Logic Consistency</span>
+                    <span id="summary-logic" class="summary-value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="ontograde-breakdown">
+            <h3>Detailed Breakdown</h3>
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">BFO Rooting</span>
+                    <span id="breakdown-bfo-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-bfo-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-bfo-details" class="breakdown-details">-</div>
+            </div>
+
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">Pattern Adherence</span>
+                    <span id="breakdown-patterns-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-patterns-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-patterns-details" class="breakdown-details">-</div>
+            </div>
+
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">Logic Consistency</span>
+                    <span id="breakdown-logic-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-logic-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-logic-details" class="breakdown-details">-</div>
+            </div>
+        </div>
+
+        <div id="ontograde-violations" class="ontograde-violations" style="display: none;">
+            <h3>Violations (<span id="violation-count">0</span>)</h3>
+            <div id="violations-list" class="violations-list"></div>
+        </div>
+
+        <div id="ontograde-recommendations" class="ontograde-recommendations">
+            <h3>Recommendations</h3>
+            <ul id="recommendations-list" class="recommendations-list"></ul>
+        </div>
+
+        <div class="ontograde-footer">
+            <div class="report-metadata">
+                <span id="report-timestamp" class="report-time">-</span>
+                <span class="report-version">OntoGrade v2.0</span>
+            </div>
+            <div class="modal-buttons">
+                <button id="ontograde-download-btn" class="button-primary">Download Report (JSON-LD)</button>
+                <button id="ontograde-done-btn">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Project Settings Modal -->
 <div id="project-settings-modal" class="modal">
     <div class="modal-content">

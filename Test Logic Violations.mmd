@@ -1,0 +1,52 @@
+graph TD
+
+%% =========================
+%% Test diagram with Logic Consistency Violations
+%% Uses rdf:type to create disjointness violations
+%% Expected: BFO 100%, Patterns 100%, Logic ~20%
+%% Score: ~3.4/5.0
+%% =========================
+
+%% Valid base entities
+Person["Person<br>IRI: cco:Person"]
+House["House<br>IRI: cco:House"]
+
+%% VIOLATION 1: Entity that is both Continuant and Occurrent
+%% Same entity ID with two incompatible types
+Hybrid1_Continuant["HybridEntity1<br>IRI: bfo:MaterialEntity"]
+Hybrid1_Occurrent["HybridEntity1<br>IRI: bfo:Process"]
+%% These share the same ID "Hybrid1" but have disjoint types
+%% MaterialEntity (Continuant) and Process (Occurrent) are fundamentally disjoint
+
+%% VIOLATION 2: Entity that is both Material and Immaterial
+Material_Type["BadEntity<br>IRI: bfo:MaterialEntity"]
+Immaterial_Type["BadEntity<br>IRI: bfo:ImmaterialEntity"]
+%% MaterialEntity and ImmaterialEntity are disjoint
+
+%% VIOLATION 3: Entity that is both Object and Process
+Object_Type["Conflicted<br>IRI: bfo:Object"]
+Process_Type["Conflicted<br>IRI: bfo:Process"]
+%% Object (Continuant) and Process (Occurrent) are disjoint
+
+%% VIOLATION 4: Specifically and Generically Dependent
+SpecDepType["DependentEntity<br>IRI: bfo:SpecificallyDependentContinuant"]
+GenDepType["DependentEntity<br>IRI: bfo:GenericallyDependentContinuant"]
+%% These dependent continuant types are mutually exclusive
+
+%% VIOLATION 5: Direct Continuant/Occurrent collision
+ContinuantType["SuperBad<br>IRI: bfo:Continuant"]
+OccurrentType["SuperBad<br>IRI: bfo:Occurrent"]
+%% The top-level disjointness violation
+
+%% Some relations to make it interesting
+Person -->|relatesTo| House
+Hybrid1_Continuant -->|relatesTo| Person
+Hybrid1_Occurrent -->|temporallyRelatedTo| House
+
+%% Valid entities for comparison (no violations)
+ValidPerson["ValidPerson<br>IRI: cco:Person"]
+ValidRole["ValidRole<br>IRI: cco:Role"]
+ValidProcess["ValidProcess<br>IRI: cco:Process"]
+
+ValidPerson -->|is_bearer_of| ValidRole
+ValidProcess -->|realizes| ValidRole

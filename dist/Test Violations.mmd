@@ -1,0 +1,21 @@
+graph TD
+
+%% =========================
+%% Test diagram with intentional violations
+%% Expected score: ~3.8/5.0
+%% =========================
+
+%% VIOLATION 1-5: Orphan classes (not rooted in BFO)
+OrphanClass["OrphanClass<br>IRI: ex:OrphanClass"]
+BadRole["BadRole<br>IRI: cco:BadRole"]
+BrokenName["BrokenName<br>IRI: cco:BrokenName"]
+ConflictEntity["ConflictEntity<br>IRI: ex:ConflictEntity"]
+CustomProcess["CustomProcess<br>IRI: ex:CustomProcess"]
+
+%% Valid entity (properly rooted)
+Person["Person<br>IRI: cco:Person"]
+
+%% Some relations
+OrphanClass -->|relatesTo| Person
+Person -->|is_bearer_of| BadRole
+Person -->|is_designated_by| BrokenName

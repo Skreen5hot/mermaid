@@ -10,7 +10,10 @@
     "test:all": "npm test && npm run test:ui",
     "security-check": "npm audit --audit-level=high",
     "prepare": "husky",
-    "build": "node build.js"
+    "build": "node build.js",
+    "test:ontograde": "npm run test:ontograde:patterns && npm run test:ontograde:logic",
+    "test:ontograde:patterns": "node test-patterns-fresh.js",
+    "test:ontograde:logic": "node test-logic-violations.js"
   },
   "keywords": [],
   "author": "",

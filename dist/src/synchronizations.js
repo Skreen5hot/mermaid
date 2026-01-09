@@ -21,6 +21,7 @@ import { shaclValidator } from './concepts/ontograde/shaclValidator.js';
 import { logicReasoner } from './concepts/ontograde/logicReasoner.js';
 import { gradingEngine } from './concepts/ontograde/gradingEngine.js';
 import { reportGenerator } from './concepts/ontograde/reportGenerator.js';
+import { reportViewer } from './concepts/ontograde/reportViewer.js';
 
 /**
  * A list of declarative rules that define how concepts interact.
@@ -1270,14 +1271,19 @@ export const synchronizations = [
         violations: report.violations
       });
 
+      // Show notification
       uiConcept.actions.showNotification({
         message: `🎓 OntoGrade Complete: ${summaryText}`,
         type: report.final_score >= 4.5 ? 'success' : report.final_score >= 2.5 ? 'info' : 'warning',
         duration: 10000
       });
+
+      // Iteration 5: Show report modal
+      reportViewer.actions.showReport({ report });
     },
   },
 ];
+
 
 /**
  * Wires up the synchronizations by subscribing to events from one concept

@@ -91,6 +91,11 @@ export const mermaidLifter = {
         : lines;
 
       for (const line of dataLines) {
+        // Skip comments (lines starting with %%)
+        if (line.trim().startsWith('%%')) {
+          continue;
+        }
+
         // Node definition: Person_0["Person<br>IRI: cco:Person"]
         const nodeMatch = line.match(/(\w+)\["([^"]+)"\]/);
         if (nodeMatch) {

@@ -34,6 +34,10 @@ jobs:
           name: unit-test-results
           path: unit-test-results.json
 
+      # OntoGrade validator tests
+      - name: Run OntoGrade tests
+        run: npm run test:ontograde
+
       - name: Add test summary to workflow
         if: always()
         run: |

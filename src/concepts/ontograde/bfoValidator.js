@@ -144,20 +144,31 @@ export const bfoValidator = {
       const entityIri = getBFOIri('BFO_0000001'); // bfo:Entity
 
       for (const classIri of userClasses) {
-        const path = bfoValidator.helpers.findPathToEntity(
-          classIri,
-          entityIri,
-          rdfGraph,
-          referenceStore
-        );
+        // Check if this is already a BFO class (either BFO_* or named BFO classes like MaterialEntity)
+        const isBFOClass = classIri.includes('purl.obolibrary.org/obo/') &&
+                           !classIri.includes('CommonCoreOntologies');
 
-        if (path && path.length > 0) {
+        if (isBFOClass) {
+          // BFO classes are inherently rooted
           results.rootedClasses++;
-          results.paths[classIri] = path;
+          results.paths[classIri] = [classIri]; // Path to itself
         } else {
-          results.orphanClasses++;
-          results.orphans.push(classIri);
-          results.pass = false;
+          // For non-BFO classes, find path to bfo:Entity
+          const path = bfoValidator.helpers.findPathToEntity(
+            classIri,
+            entityIri,
+            rdfGraph,
+            referenceStore
+          );
+
+          if (path && path.length > 0) {
+            results.rootedClasses++;
+            results.paths[classIri] = path;
+          } else {
+            results.orphanClasses++;
+            results.orphans.push(classIri);
+            results.pass = false;
+          }
         }
       }
 
@@ -192,13 +203,12 @@ export const bfoValidator = {
           continue;
         }
 
-        // Only include CCO/custom classes, not BFO, RDF, OWL, XSD, etc.
+        // Include CCO classes, BFO classes, and custom classes
+        // Exclude only RDF, RDFS, OWL, XSD infrastructure classes
         if (
           classIri.includes('CommonCoreOntologies') ||
           classIri.includes('example.org') ||
-          (classIri.includes('purl.obolibrary.org/obo/') &&
-           !classIri.includes('BFO_') &&
-           !classIri.includes('IAO_'))
+          classIri.includes('purl.obolibrary.org/obo/')
         ) {
           classes.add(classIri);
         }
