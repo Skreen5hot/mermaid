@@ -19,6 +19,8 @@ import { mermaidLifter } from './concepts/ontograde/mermaidLifter.js';
 import { bfoValidator } from './concepts/ontograde/bfoValidator.js';
 import { shaclValidator } from './concepts/ontograde/shaclValidator.js';
 import { logicReasoner } from './concepts/ontograde/logicReasoner.js';
+import { gradingEngine } from './concepts/ontograde/gradingEngine.js';
+import { reportGenerator } from './concepts/ontograde/reportGenerator.js';
 
 /**
  * A list of declarative rules that define how concepts interact.
@@ -1198,6 +1200,80 @@ export const synchronizations = [
         message: `OntoGrade Error: ${error.userMessage || error.error || 'Consistency check failed'}`,
         type: 'error',
         duration: 7000
+      });
+    },
+  },
+
+  // ========== OntoGrade Iteration 4: Scoring & Reporting ==========
+
+  // Iteration 4: Register BFO validation result in grading engine
+  {
+    when: 'rootingValidated',
+    from: bfoValidator,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] Registering BFO result for grading: ${diagramId}`);
+      gradingEngine.actions.registerResult({
+        diagramId,
+        validator: 'bfo',
+        result
+      });
+    },
+  },
+
+  // Iteration 4: Register SHACL pattern validation result in grading engine
+  {
+    when: 'patternsValidated',
+    from: shaclValidator,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] Registering patterns result for grading: ${diagramId}`);
+      gradingEngine.actions.registerResult({
+        diagramId,
+        validator: 'patterns',
+        result
+      });
+    },
+  },
+
+  // Iteration 4: Register logic consistency result in grading engine
+  {
+    when: 'consistencyChecked',
+    from: logicReasoner,
+    do: ({ diagramId, result }) => {
+      console.log(`[Sync] Registering logic result for grading: ${diagramId}`);
+      gradingEngine.actions.registerResult({
+        diagramId,
+        validator: 'logic',
+        result
+      });
+    },
+  },
+
+  // Iteration 4: Generate report when final score is calculated
+  {
+    when: 'scoreCalculated',
+    from: gradingEngine,
+    do: ({ diagramId, scoreResult }) => {
+      console.log(`[Sync] Score calculated for ${diagramId}: ${scoreResult.finalScore}/5.0`);
+      reportGenerator.actions.generate({ scoreResult });
+    },
+  },
+
+  // Iteration 4: Show final notification when report is ready
+  {
+    when: 'reportReady',
+    from: reportGenerator,
+    do: ({ diagramId, report }) => {
+      console.log(`[Sync] Report ready for ${diagramId}`);
+
+      const summaryText = gradingEngine.helpers.getSummaryText({
+        finalScore: report.final_score,
+        violations: report.violations
+      });
+
+      uiConcept.actions.showNotification({
+        message: `🎓 OntoGrade Complete: ${summaryText}`,
+        type: report.final_score >= 4.5 ? 'success' : report.final_score >= 2.5 ? 'info' : 'warning',
+        duration: 10000
       });
     },
   },
