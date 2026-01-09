@@ -187,10 +187,15 @@ export const bfoValidator = {
       for (const quad of typeQuads) {
         const classIri = quad.object.value;
 
-        // Only include CCO/custom classes, not BFO, RDF, OWL, XSD literals, etc.
-        // Exclude example.org literal placeholders (Name_Lit, Addr_Lit)
+        // Exclude literal placeholders (nodes ending with _Lit)
+        if (classIri.endsWith('_Lit')) {
+          continue;
+        }
+
+        // Only include CCO/custom classes, not BFO, RDF, OWL, XSD, etc.
         if (
           classIri.includes('CommonCoreOntologies') ||
+          classIri.includes('example.org') ||
           (classIri.includes('purl.obolibrary.org/obo/') &&
            !classIri.includes('BFO_') &&
            !classIri.includes('IAO_'))
