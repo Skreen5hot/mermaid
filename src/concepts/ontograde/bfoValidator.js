@@ -86,6 +86,9 @@ export const bfoValidator = {
         console.log(`  - Total classes: ${result.totalClasses}`);
         console.log(`  - Rooted: ${result.rootedClasses}`);
         console.log(`  - Orphans: ${result.orphanClasses}`);
+        if (result.orphans.length > 0) {
+          console.log(`  - Orphan IRIs:`, result.orphans);
+        }
         console.log(`  - Pass: ${result.pass ? 'YES' : 'NO'}`);
 
         notify('rootingValidated', { diagramId, result });
@@ -115,6 +118,8 @@ export const bfoValidator = {
 
       // Extract all user-defined classes from the graph
       const userClasses = bfoValidator.helpers.extractUserClasses(rdfGraph);
+
+      console.log(`[bfoValidator] Extracted ${userClasses.length} user classes:`, userClasses);
 
       if (userClasses.length === 0) {
         return {
