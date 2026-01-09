@@ -83,14 +83,15 @@ describe('bfoValidator', () => {
       assert.ok(classes.includes('http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'));
     });
 
-    it('should ignore BFO classes', () => {
+    it('should include BFO classes (Iteration 5 enhancement)', () => {
       const graph = createTestGraph([
         ['http://example.org/Thing_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://purl.obolibrary.org/obo/BFO_0000001'], // BFO class
       ]);
 
       const classes = bfoValidator.helpers.extractUserClasses(graph);
 
-      assert.equal(classes.length, 0, 'Should ignore BFO classes');
+      assert.equal(classes.length, 1, 'Should include BFO classes for direct usage');
+      assert.ok(classes.includes('http://purl.obolibrary.org/obo/BFO_0000001'));
     });
 
     it('should include example.org classes', () => {
