@@ -22,6 +22,7 @@ import { logicReasoner } from './concepts/ontograde/logicReasoner.js';
 import { gradingEngine } from './concepts/ontograde/gradingEngine.js';
 import { reportGenerator } from './concepts/ontograde/reportGenerator.js';
 import { reportViewer } from './concepts/ontograde/reportViewer.js';
+import { patternLibraryViewer } from './concepts/ontograde/patternLibraryViewer.js';
 
 /**
  * A list of declarative rules that define how concepts interact.
@@ -994,6 +995,18 @@ export const synchronizations = [
                       `The file was updated with changes from the server.\n\n` +
                       `Your local changes have been saved to a new file: "${conflictTitle}".`;
       uiConcept.actions.showNotification({ message, type: 'info', duration: 10000 });
+    },
+  },
+
+  // ========== Pattern Library Synchronizations ==========
+
+  // Pattern Library: Open the pattern library browser
+  {
+    when: 'patternLibraryRequested',
+    from: uiConcept,
+    do: () => {
+      console.log('[Sync] Pattern Library requested');
+      patternLibraryViewer.actions.showLibrary();
     },
   },
 

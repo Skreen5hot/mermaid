@@ -62,6 +62,7 @@
                     <button id="rename-btn">Rename</button>
                 <button id="export-mmd-btn">Export .mmd</button>
                 <button id="ontograde-btn" title="Evaluate Ontology Quality">🎓 OntoGrade</button>
+                <button id="pattern-library-btn" title="Browse CCO Design Patterns">📚 Patterns</button>
                 <button id="fullscreen-btn" title="Toggle Fullscreen">⇱</button>
                 </div>
                 <div id="file-info">No file open.</div>
@@ -256,6 +257,54 @@
                 <button id="ontograde-download-btn" class="button-primary">Download Report (JSON-LD)</button>
                 <button id="ontograde-done-btn">Done</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Library Modal -->
+<div id="pattern-library-modal" class="modal">
+    <div class="modal-content pattern-library-modal-content">
+        <div class="pattern-library-header">
+            <h2>
+                📚 CCO Design Pattern Library
+                <button id="pattern-library-close-btn" class="modal-close-btn">×</button>
+            </h2>
+            <p class="pattern-library-subtitle">
+                Browse and learn about Common Core Ontology design patterns validated by OntoGrade
+            </p>
+            <div class="pattern-controls">
+                <input type="search"
+                       id="pattern-search"
+                       placeholder="Search patterns..."
+                       class="pattern-search">
+                <select id="category-filter" class="category-filter">
+                    <option value="all">All Categories</option>
+                    <option value="core">Core (3)</option>
+                    <option value="temporal">Temporal (1)</option>
+                    <option value="measurement">Measurement (1)</option>
+                    <option value="agent">Agent (2)</option>
+                    <option value="artifact">Artifact (1)</option>
+                </select>
+                <div class="view-toggle">
+                    <button id="grid-view-btn" class="active">Grid</button>
+                    <button id="list-view-btn">List</button>
+                </div>
+            </div>
+        </div>
+        <div id="pattern-grid" class="pattern-grid">
+            <!-- Pattern cards populated by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Detail Modal -->
+<div id="pattern-detail-modal" class="modal">
+    <div class="modal-content pattern-detail-modal-content">
+        <div id="pattern-detail-content">
+            <!-- Pattern detail content populated by JS -->
+        </div>
+        <div class="modal-buttons">
+            <button id="pattern-detail-close-btn">Close</button>
         </div>
     </div>
 </div>

@@ -89,7 +89,17 @@ export const gradingEngine = {
       // Convert to 0-5 scale
       const finalScore = (weightedScore / 100) * 5;
 
-      // Create breakdown
+      // Get vocabulary status from pattern validation
+      const vocabStatus = patterns.vocabularyStatus || {
+        totalEntities: 0,
+        unknownEntities: 0,
+        unknownPredicates: 0,
+        unknownPercentage: 0,
+        hasUnknownVocabulary: false,
+        recognizedPercentage: 100,
+      };
+
+      // Create breakdown - propagate vocabulary status to all validators
       const breakdown = {
         bfo: {
           score: bfoScore,
@@ -99,6 +109,8 @@ export const gradingEngine = {
             totalClasses: bfo.totalClasses,
             rootedClasses: bfo.rootedClasses,
             orphanClasses: bfo.orphanClasses,
+            // Propagate vocabulary status - BFO can't validate if entities are unrecognized
+            vocabularyStatus: vocabStatus,
           },
         },
         patterns: {
@@ -108,6 +120,7 @@ export const gradingEngine = {
           details: {
             complianceScore: patterns.complianceScore,
             violations: patterns.violations.length,
+            vocabularyStatus: vocabStatus,
           },
         },
         logic: {
@@ -117,15 +130,30 @@ export const gradingEngine = {
           details: {
             integrityScore: logic.integrityScore,
             inconsistencies: logic.inconsistencies.length,
+            // Propagate vocabulary status - Logic can't validate if entities are unrecognized
+            vocabularyStatus: vocabStatus,
           },
         },
       };
 
-      // Create summary
+      // Create summary - all validators show "Unknown" if vocabulary is unrecognized
+      let bfoSummary, logicSummary, patternSummary;
+
+      if (vocabStatus.hasUnknownVocabulary) {
+        // When vocabulary is unrecognized, all validators show "Unknown"
+        bfoSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
+        logicSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
+        patternSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
+      } else {
+        bfoSummary = bfo.pass ? 'Pass' : `Partial (${bfo.rootedClasses}/${bfo.totalClasses} classes rooted)`;
+        logicSummary = logic.pass ? 'Pass' : `Partial (${logic.inconsistencies.length} inconsistencies)`;
+        patternSummary = patterns.pass ? 'Pass' : `Partial (${patterns.violations.length} violations)`;
+      }
+
       const summary = {
-        bfo_rooting: bfo.pass ? 'Pass' : `Partial (${bfo.rootedClasses}/${bfo.totalClasses} classes rooted)`,
-        logic_consistency: logic.pass ? 'Pass' : `Partial (${logic.inconsistencies.length} inconsistencies)`,
-        pattern_adherence: patterns.pass ? 'Pass' : `Partial (${patterns.violations.length} violations)`,
+        bfo_rooting: bfoSummary,
+        logic_consistency: logicSummary,
+        pattern_adherence: patternSummary,
       };
 
       // Collect all violations
@@ -154,7 +182,10 @@ export const gradingEngine = {
 
       const scoreResult = {
         diagramId,
-        finalScore: Math.round(finalScore * 10) / 10, // Round to 1 decimal
+        // When vocabulary is unrecognized, set finalScore to null to indicate UNKNOWN
+        finalScore: vocabStatus.hasUnknownVocabulary ? null : Math.round(finalScore * 10) / 10,
+        hasUnknownVocabulary: vocabStatus.hasUnknownVocabulary,
+        unknownPercentage: vocabStatus.unknownPercentage,
         breakdown,
         summary,
         violations,
@@ -165,7 +196,11 @@ export const gradingEngine = {
       gradingEngine.state.breakdown = breakdown;
       gradingEngine.state.scoreResults.set(diagramId, scoreResult);
 
-      console.log(`[gradingEngine] Final score calculated: ${scoreResult.finalScore}/5.0`);
+      if (vocabStatus.hasUnknownVocabulary) {
+        console.log(`[gradingEngine] Score: UNKNOWN (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`);
+      } else {
+        console.log(`[gradingEngine] Final score calculated: ${scoreResult.finalScore}/5.0`);
+      }
       console.log(`  - BFO: ${bfoScore}% (contribution: ${breakdown.bfo.contribution.toFixed(1)})`);
       console.log(`  - Patterns: ${patternsScore}% (contribution: ${breakdown.patterns.contribution.toFixed(1)})`);
       console.log(`  - Logic: ${logicScore}% (contribution: ${breakdown.logic.contribution.toFixed(1)})`);

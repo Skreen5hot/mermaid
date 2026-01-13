@@ -38,7 +38,11 @@ export const reportGenerator = {
       reportGenerator.state.reports.set(scoreResult.diagramId, report);
 
       console.log(`[reportGenerator] Report generated:`);
-      console.log(`  - Final score: ${report.final_score}/5.0`);
+      if (report.hasUnknownVocabulary) {
+        console.log(`  - Final score: UNKNOWN (${report.unknownPercentage}% unrecognized vocabulary)`);
+      } else {
+        console.log(`  - Final score: ${report.final_score}/5.0`);
+      }
       console.log(`  - Violations: ${report.violations.length}`);
       console.log(`  - Recommendations: ${report.recommendations.length}`);
 
@@ -84,10 +88,10 @@ export const reportGenerator = {
      * @returns {Object} JSON-LD report
      */
     createReport(scoreResult) {
-      const { finalScore, summary, violations, breakdown, timestamp } = scoreResult;
+      const { finalScore, hasUnknownVocabulary, unknownPercentage, summary, violations, breakdown, timestamp } = scoreResult;
 
       // Generate recommendations based on violations
-      const recommendations = reportGenerator.helpers.generateRecommendations(violations, breakdown);
+      const recommendations = reportGenerator.helpers.generateRecommendations(violations, breakdown, hasUnknownVocabulary);
 
       const report = {
         '@context': 'https://ontograde.org/context/v2',
@@ -95,6 +99,8 @@ export const reportGenerator = {
         ontograde_version: '2.0',
         timestamp,
         final_score: finalScore,
+        hasUnknownVocabulary: hasUnknownVocabulary || false,
+        unknownPercentage: unknownPercentage || 0,
         summary,
         breakdown: {
           bfo_rooting: {
@@ -127,10 +133,25 @@ export const reportGenerator = {
      * Generates recommendations based on violations
      * @param {Array<Object>} violations - Array of violations
      * @param {Object} breakdown - Score breakdown
+     * @param {boolean} hasUnknownVocabulary - Whether vocabulary is unrecognized
      * @returns {Array<string>} Array of recommendations
      */
-    generateRecommendations(violations, breakdown) {
+    generateRecommendations(violations, breakdown, hasUnknownVocabulary = false) {
       const recommendations = [];
+
+      // If vocabulary is unrecognized, add primary recommendation
+      if (hasUnknownVocabulary) {
+        recommendations.push(
+          'Use CCO vocabulary (http://www.ontologyrepository.com/CommonCoreOntologies/) or BFO vocabulary (http://purl.obolibrary.org/obo/)'
+        );
+        recommendations.push(
+          'Check for typos in entity IRIs - namespace prefixes and URLs must be exact'
+        );
+        recommendations.push(
+          'Validation cannot proceed until entities use recognized CCO/BFO namespaces'
+        );
+        return recommendations;
+      }
 
       // BFO rooting recommendations
       const bfoViolations = violations.filter(v => v.type === 'BFO');
@@ -240,7 +261,11 @@ export const reportGenerator = {
       lines.push(`Timestamp: ${report.timestamp}`);
       lines.push(`OntoGrade Version: ${report.ontograde_version}`);
       lines.push('');
-      lines.push(`FINAL SCORE: ${report.final_score}/5.0`);
+      if (report.hasUnknownVocabulary) {
+        lines.push(`FINAL SCORE: UNKNOWN (${report.unknownPercentage}% unrecognized vocabulary)`);
+      } else {
+        lines.push(`FINAL SCORE: ${report.final_score}/5.0`);
+      }
       lines.push('');
 
       lines.push('SUMMARY:');

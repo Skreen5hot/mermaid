@@ -71,7 +71,7 @@ function _cacheElements() {
         // Existing elements
         'unlock-project-name', 'unlock-password', 'unlock-error',
         'unlock-cancel-btn', 'unlock-submit-btn', 'toast-container',
-        'export-mmd-btn', 'render-btn', 'ontograde-btn',
+        'export-mmd-btn', 'render-btn', 'ontograde-btn', 'pattern-library-btn',
         'sync-status', 'sync-status-icon', 'sync-status-text'
     ];
     ids.forEach(id => elements[id] = document.getElementById(id));
@@ -475,6 +475,10 @@ function _attachEventListeners() {
     elements['ontograde-btn']?.addEventListener('click', () => {
         console.log('[UI] OntoGrade button clicked');
         notify('ontoGradeRequested');
+    });
+    elements['pattern-library-btn']?.addEventListener('click', () => {
+        console.log('[UI] Pattern Library button clicked');
+        notify('patternLibraryRequested');
     });
     elements['download-project-btn']?.addEventListener('click', () => notify('ui:downloadProjectClicked'));
     elements['code-editor']?.addEventListener('input', (e) => notify('ui:editorContentChanged', { content: e.target.value }));

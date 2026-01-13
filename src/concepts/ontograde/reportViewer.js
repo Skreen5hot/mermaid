@@ -189,7 +189,17 @@ export const reportViewer = {
     populateScore(report) {
       const { finalScore, scoreLabel } = reportViewer.state.modalElements;
 
+      // Check if vocabulary is unrecognized - show UNKNOWN instead of numeric score
+      if (report.hasUnknownVocabulary || report.final_score === null) {
+        finalScore.textContent = 'UNKNOWN';
+        finalScore.className = 'final-score unknown';
+        scoreLabel.textContent = `${report.unknownPercentage || 0}% unrecognized vocabulary`;
+        scoreLabel.className = 'score-label unknown';
+        return;
+      }
+
       finalScore.textContent = report.final_score.toFixed(1);
+      finalScore.className = 'final-score';
 
       // Determine score category
       let label, cssClass;
@@ -234,6 +244,8 @@ export const reportViewer = {
       // Determine CSS class
       if (value === 'Pass') {
         element.className = 'summary-value pass';
+      } else if (value.includes('Unknown')) {
+        element.className = 'summary-value unknown';
       } else if (value.includes('Partial')) {
         element.className = 'summary-value partial';
       } else {
@@ -265,29 +277,68 @@ export const reportViewer = {
      */
     setBreakdownSection(name, data) {
       const elements = reportViewer.state.modalElements;
+      const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
 
-      // Set score
-      elements[`breakdown${name.charAt(0).toUpperCase() + name.slice(1)}Score`].textContent =
-        `${data.score}% (weight: ${(data.weight * 100).toFixed(0)}%)`;
+      // Check for unknown vocabulary status - applies to ALL validators
+      const vocabStatus = data.details?.vocabularyStatus;
+      const hasUnknown = vocabStatus?.hasUnknownVocabulary || false;
+      const unknownPercentage = vocabStatus?.unknownPercentage || 0;
 
-      // Set progress bar
-      const bar = elements[`breakdown${name.charAt(0).toUpperCase() + name.slice(1)}Bar`];
+      // Set score - show "UNKNOWN" for ANY validator when vocabulary is unrecognized
+      const scoreElement = elements[`breakdown${capitalizedName}Score`];
+      if (hasUnknown) {
+        scoreElement.textContent = `UNKNOWN (${unknownPercentage}% unrecognized)`;
+        scoreElement.className = 'breakdown-score unknown';
+      } else {
+        scoreElement.textContent = `${data.score}% (weight: ${(data.weight * 100).toFixed(0)}%)`;
+        scoreElement.className = 'breakdown-score';
+      }
+
+      // Set progress bar - show orange for unknown portion
+      const bar = elements[`breakdown${capitalizedName}Bar`];
+      const barParent = bar.parentElement;
+
+      // Remove any existing unknown bar
+      const existingUnknownBar = barParent.querySelector('.breakdown-fill-unknown');
+      if (existingUnknownBar) {
+        existingUnknownBar.remove();
+      }
+
       setTimeout(() => {
-        bar.style.width = `${data.score}%`;
+        if (hasUnknown) {
+          // Show orange bar for unknown portion (applies to all validators)
+          bar.style.width = `${vocabStatus.recognizedPercentage}%`;
+          bar.className = 'breakdown-fill';
+
+          // Add orange bar for unknown portion
+          const unknownBar = document.createElement('div');
+          unknownBar.className = 'breakdown-fill-unknown';
+          unknownBar.style.width = `${unknownPercentage}%`;
+          unknownBar.style.left = `${vocabStatus.recognizedPercentage}%`;
+          barParent.appendChild(unknownBar);
+        } else {
+          bar.style.width = `${data.score}%`;
+          bar.className = 'breakdown-fill';
+        }
       }, 100); // Delay for animation
 
-      // Set details
-      let details = `Contribution to final score: ${data.contribution.toFixed(1)} points`;
-      if (data.details) {
-        if (name === 'bfo') {
-          details += ` | ${data.details.rootedClasses}/${data.details.totalClasses} classes rooted`;
-        } else if (name === 'patterns') {
-          details += ` | ${data.details.violations} violation(s)`;
-        } else if (name === 'logic') {
-          details += ` | ${data.details.inconsistencies} inconsistency(ies)`;
+      // Set details - show vocabulary message for ALL validators when unknown
+      let details;
+      if (hasUnknown) {
+        details = `${vocabStatus.unknownEntities} entities and ${vocabStatus.unknownPredicates} predicates not in CCO/BFO vocabulary`;
+      } else {
+        details = `Contribution to final score: ${data.contribution.toFixed(1)} points`;
+        if (data.details) {
+          if (name === 'bfo') {
+            details += ` | ${data.details.rootedClasses}/${data.details.totalClasses} classes rooted`;
+          } else if (name === 'patterns') {
+            details += ` | ${data.details.violations} violation(s)`;
+          } else if (name === 'logic') {
+            details += ` | ${data.details.inconsistencies} inconsistency(ies)`;
+          }
         }
       }
-      elements[`breakdown${name.charAt(0).toUpperCase() + name.slice(1)}Details`].textContent = details;
+      elements[`breakdown${capitalizedName}Details`].textContent = details;
     },
 
     /**

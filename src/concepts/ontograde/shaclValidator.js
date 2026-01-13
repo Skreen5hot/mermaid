@@ -14,7 +14,8 @@
  * @see src/ontologies/ontograde-shapes.ttl
  */
 
-import { isCCOClass } from '../../ontologies/cco-bfo-mapping.ttl.js';
+import { isCCOClass, SUPPORTED_CCO_CLASSES } from '../../ontologies/cco-bfo-mapping.ttl.js';
+import { BFO_LABELS } from '../../ontologies/bfo-core.ttl.js';
 
 // CCO/BFO IRIs
 const CCO = 'http://www.ontologyrepository.com/CommonCoreOntologies/';
@@ -58,7 +59,168 @@ const CCO_PROPS = {
   has_measurement_value: `${CCO}has_measurement_value`,
   uses_measurement_unit: `${CCO}uses_measurement_unit`,
   is_measured_by: `${CCO}is_measured_by`,
+  // EXPERT REVIEW (2026-01-13): Added "Realist Glue" properties per CCO expert
+  is_part_of: `${CCO}is_part_of`,
+  is_attribute_of: `${CCO}is_attribute_of`,
+  affects: `${CCO}affects`,
+  // EXPERT CERTIFICATION (2026-01-13): Additional predicates per CCO expert
+  is_made_of: `${CCO}is_made_of`,
+  is_site_of: `${CCO}is_site_of`,
 };
+
+/**
+ * Domain/Range constraints for CCO predicates
+ * Each predicate has:
+ * - domain: Array of class IRIs that can be the subject
+ * - range: Array of class IRIs that can be the object (or 'Literal' for datatype properties)
+ * - description: Human-readable description for error messages
+ *
+ * Based on CCO documentation and BFO upper-level ontology
+ * Note: These are simplified constraints suitable for Mermaid-level validation
+ */
+const PREDICATE_CONSTRAINTS = {
+  [CCO_PROPS.is_concretized_by]: {
+    domain: [`${CCO}InformationContentEntity`],
+    range: [`${CCO}InformationBearingEntity`],
+    description: 'ICE is_concretized_by IBE',
+  },
+  [CCO_PROPS.concretizes]: {
+    domain: [`${CCO}InformationBearingEntity`],
+    range: [`${CCO}InformationContentEntity`],
+    description: 'IBE concretizes ICE',
+  },
+  [CCO_PROPS.has_text_value]: {
+    domain: [`${CCO}InformationBearingEntity`],
+    range: ['Literal'],
+    description: 'IBE has_text_value Literal',
+  },
+  [CCO_PROPS.is_bearer_of]: {
+    // IndependentContinuant or common CCO subtypes (Person, Agent, Organization, Artifact)
+    domain: [`${BFO}BFO_0000004`, `${CCO}Person`, `${CCO}Agent`, `${CCO}Organization`, `${CCO}Artifact`],
+    range: [`${CCO}Role`, `${CCO}StudentRole`, `${CCO}ResidentRole`, `${CCO}EmployeeRole`, `${BFO}BFO_0000023`], // Role and subtypes
+    description: 'IndependentContinuant is_bearer_of Role',
+  },
+  [CCO_PROPS.realizes]: {
+    // EXPERT REVIEW (2026-01-13): Domain rooted in bfo:Process (BFO_0000015) as cco:Act is a subtype
+    domain: [`${BFO}BFO_0000015`, `${CCO}Act`, `${CCO}IntentionalAct`], // Process and subtypes
+    range: [`${CCO}Role`, `${CCO}StudentRole`, `${CCO}ResidentRole`, `${CCO}EmployeeRole`, `${BFO}BFO_0000023`], // Role and subtypes
+    description: 'Process realizes Role',
+  },
+  [CCO_PROPS.designates]: {
+    domain: [`${CCO}DesignativeInformationContentEntity`, `${CCO}Name`, `${CCO}Identifier`],
+    range: [], // Any entity can be designated
+    description: 'DesignativeICE designates Entity',
+  },
+  [CCO_PROPS.is_designated_by]: {
+    domain: [], // Any entity can be designated
+    range: [`${CCO}DesignativeInformationContentEntity`, `${CCO}Name`, `${CCO}Identifier`],
+    description: 'Entity is_designated_by DesignativeICE',
+  },
+  [CCO_PROPS.participates_in]: {
+    domain: [`${CCO}Agent`, `${CCO}Person`, `${CCO}Organization`, `${BFO}BFO_0000040`], // Material entities
+    range: [`${CCO}Act`, `${BFO}BFO_0000015`], // Process
+    description: 'Agent participates_in Act',
+  },
+  [CCO_PROPS.occurs_during]: {
+    domain: [`${CCO}Act`, `${BFO}BFO_0000015`], // Process
+    range: [`${CCO}TemporalInterval`, `${BFO}BFO_0000038`], // Temporal region
+    description: 'Act occurs_during TemporalInterval',
+  },
+  [CCO_PROPS.has_start_time]: {
+    domain: [`${CCO}TemporalInterval`, `${BFO}BFO_0000038`],
+    range: ['Literal'], // Datetime literal
+    description: 'TemporalInterval has_start_time DateTime',
+  },
+  [CCO_PROPS.has_end_time]: {
+    domain: [`${CCO}TemporalInterval`, `${BFO}BFO_0000038`],
+    range: ['Literal'], // Datetime literal
+    description: 'TemporalInterval has_end_time DateTime',
+  },
+  [CCO_PROPS.has_measurement_value]: {
+    domain: [`${CCO}QualityMeasurement`],
+    range: ['Literal'], // Numeric literal
+    description: 'QualityMeasurement has_measurement_value Number',
+  },
+  [CCO_PROPS.uses_measurement_unit]: {
+    domain: [`${CCO}QualityMeasurement`],
+    range: [`${CCO}MeasurementUnit`],
+    description: 'QualityMeasurement uses_measurement_unit MeasurementUnit',
+  },
+  [CCO_PROPS.is_measured_by]: {
+    domain: [`${BFO}BFO_0000019`, `${CCO}Quality`], // Quality
+    range: [`${CCO}QualityMeasurement`],
+    description: 'Quality is_measured_by QualityMeasurement',
+  },
+  // EXPERT REVIEW (2026-01-13): Added "Realist Glue" properties per CCO expert
+  // EXPERT CERTIFICATION (2026-01-13): is_part_of requires strict like-to-like checking
+  // A Continuant can participate in a Process, but NEVER be a part of it.
+  // Parts of processes must be other processes (temporal parts).
+  [CCO_PROPS.is_part_of]: {
+    // Strict like-to-like: Continuant to Continuant only, or Occurrent to Occurrent only
+    // Cross-type relationships (Continuant part_of Occurrent) are VIOLATIONS
+    domain: [`${BFO}BFO_0000002`, `${CCO}Person`, `${CCO}Organization`, `${CCO}Artifact`], // Continuants only
+    range: [`${BFO}BFO_0000002`, `${CCO}Organization`, `${CCO}Artifact`, `${CCO}GroupOfAgents`], // Continuants only
+    description: 'Continuant is_part_of Continuant (strict like-to-like)',
+    // Note: Process parts handled separately via temporal part relations
+    likeToLike: true, // Flag for special cross-category checking
+  },
+  [CCO_PROPS.is_attribute_of]: {
+    // Qualities/Dispositions point to Independent Continuants
+    domain: [`${BFO}BFO_0000019`, `${BFO}BFO_0000016`, `${CCO}Quality`, `${CCO}Disposition`], // Quality or Disposition
+    range: [`${BFO}BFO_0000004`, `${CCO}Person`, `${CCO}Agent`, `${CCO}Organization`, `${CCO}Artifact`], // IndependentContinuant
+    description: 'Quality/Disposition is_attribute_of IndependentContinuant',
+  },
+  [CCO_PROPS.affects]: {
+    // Processes acting upon Material Entities
+    domain: [`${BFO}BFO_0000015`, `${CCO}Act`, `${CCO}IntentionalAct`], // Process
+    range: [`${BFO}BFO_0000040`, `${CCO}Person`, `${CCO}Agent`, `${CCO}Organization`, `${CCO}Artifact`], // MaterialEntity
+    description: 'Process affects MaterialEntity',
+  },
+  // EXPERT CERTIFICATION (2026-01-13): Additional predicates per CCO expert
+  [CCO_PROPS.is_made_of]: {
+    // Relates an Artifact to a MaterialEntity (what it's composed of)
+    domain: [`${CCO}Artifact`, `${BFO}BFO_0000030`], // Object (Artifact)
+    range: [`${BFO}BFO_0000040`, `${CCO}Artifact`], // MaterialEntity
+    description: 'Artifact is_made_of MaterialEntity',
+  },
+  [CCO_PROPS.is_site_of]: {
+    // Relates a Site or Facility to a Process (spatial counterpart to occurs_during)
+    domain: [`${CCO}Site`, `${CCO}Facility`, `${CCO}GeographicRegion`, `${BFO}BFO_0000029`], // Site
+    range: [`${BFO}BFO_0000015`, `${CCO}Act`, `${CCO}IntentionalAct`], // Process
+    description: 'Site is_site_of Process',
+  },
+};
+
+// Known namespaces for vocabulary validation
+// CCO has multiple valid namespace URIs depending on version/source
+const KNOWN_NAMESPACES = {
+  CCO: 'http://www.ontologyrepository.com/CommonCoreOntologies/',
+  CCO_ALT: 'https://www.commoncoreontologies.org/',  // Alternative CCO namespace
+  CCO_ALT_HTTP: 'http://www.commoncoreontologies.org/',  // HTTP variant
+  BFO: 'http://purl.obolibrary.org/obo/',
+  RDF: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  RDFS: 'http://www.w3.org/2000/01/rdf-schema#',
+  OWL: 'http://www.w3.org/2002/07/owl#',
+  XSD: 'http://www.w3.org/2001/XMLSchema#',
+};
+
+// Known predicates (CCO, RDF, RDFS properties we recognize)
+const KNOWN_PREDICATES = new Set([
+  // RDF/RDFS/OWL
+  RDF_TYPE,
+  SUBCLASS_OF,
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://www.w3.org/2002/07/owl#sameAs',
+  // CCO Properties
+  ...Object.values(CCO_PROPS),
+]);
+
+// Known CCO class names (local part after namespace)
+const KNOWN_CCO_CLASSES = new Set(SUPPORTED_CCO_CLASSES);
+
+// Known BFO class names (local part after namespace, e.g., "BFO_0000040")
+const KNOWN_BFO_CLASSES = new Set(Object.keys(BFO_LABELS));
 
 // Severity levels aligned with SHACL
 const SEVERITY = {
@@ -179,6 +341,34 @@ export const shaclValidator = {
         patternsChecked.push('Socio-Primal Pattern');
       }
 
+      // Vocabulary Validation: Check for unrecognized entities and predicates
+      const vocabularyResult = shaclValidator.helpers.checkVocabulary(rdfGraph);
+      issues.push(...vocabularyResult.issues);
+      if (vocabularyResult.entitiesChecked > 0 || vocabularyResult.predicatesChecked > 0) {
+        patternsChecked.push('Vocabulary Validation');
+      }
+
+      // Calculate unknown percentage for display
+      const totalEntities = vocabularyResult.entitiesChecked;
+      const unknownEntities = vocabularyResult.unrecognizedEntityCount;
+      const unknownPredicates = vocabularyResult.unrecognizedPredicateCount;
+
+      // Domain/Range Validation: Check predicate constraints
+      // Only run if vocabulary is mostly recognized (otherwise skip - can't validate unknown vocab)
+      const recognizedRatio = totalEntities > 0 ? (totalEntities - unknownEntities) / totalEntities : 1;
+
+      if (recognizedRatio >= 0.5) {
+        // At least 50% recognized - domain/range validation is meaningful
+        const domainRangeResult = shaclValidator.helpers.checkDomainRange(rdfGraph);
+        issues.push(...domainRangeResult.issues);
+        if (domainRangeResult.relationshipsChecked > 0) {
+          patternsChecked.push('Domain/Range Validation');
+        }
+      }
+      const unknownPercentage = totalEntities > 0
+        ? Math.round((unknownEntities / totalEntities) * 100)
+        : 0;
+
       // Separate violations from warnings
       const violations = issues.filter(i => i.severity === SEVERITY.VIOLATION);
       const warnings = issues.filter(i => i.severity === SEVERITY.WARNING);
@@ -195,6 +385,10 @@ export const shaclValidator = {
       const infoPenalty = infos.length * 1;
       const complianceScore = Math.max(0, Math.round(maxScore - violationPenalty - warningPenalty - infoPenalty));
 
+      // Determine if validation result should show "UNKNOWN" status
+      // This happens when there are unrecognized entities/predicates
+      const hasUnknownVocabulary = unknownEntities > 0 || unknownPredicates > 0;
+
       return {
         pass,
         violations: issues, // All issues for backwards compatibility
@@ -204,11 +398,22 @@ export const shaclValidator = {
         totalChecks: patternsChecked.length,
         patternsChecked,
         complianceScore,
-        message: violations.length === 0 && warnings.length === 0
-          ? 'All CCO patterns are valid'
-          : violations.length > 0
-            ? `Found ${violations.length} violation(s) and ${warnings.length} warning(s)`
-            : `Found ${warnings.length} warning(s) - validation passed`,
+        // NEW: Unknown vocabulary tracking
+        vocabularyStatus: {
+          totalEntities,
+          unknownEntities,
+          unknownPredicates,
+          unknownPercentage,
+          hasUnknownVocabulary,
+          recognizedPercentage: totalEntities > 0 ? 100 - unknownPercentage : 100,
+        },
+        message: hasUnknownVocabulary
+          ? `${unknownPercentage}% of entities use unrecognized vocabulary`
+          : violations.length === 0 && warnings.length === 0
+            ? 'All CCO patterns are valid'
+            : violations.length > 0
+              ? `Found ${violations.length} violation(s) and ${warnings.length} warning(s)`
+              : `Found ${warnings.length} warning(s) - validation passed`,
       };
     },
 
@@ -662,6 +867,482 @@ export const shaclValidator = {
         issues,
         entitiesChecked: actEntities.length,
       };
+    },
+
+    /**
+     * Validates Domain/Range constraints for CCO predicates
+     *
+     * This is appropriate for Mermaid because:
+     * - Users draw relationships between nodes (subject --predicate--> object)
+     * - CCO defines which types can be connected by which predicates
+     * - This catches semantic errors like "Person --realizes--> House"
+     *
+     * Approach:
+     * - Only validates predicates with known constraints (CCO predicates)
+     * - Checks if subject type is compatible with domain
+     * - Checks if object type is compatible with range
+     * - Uses INFO severity (not VIOLATION) since type inference is limited
+     *
+     * @param {Store} rdfGraph - N3 Store
+     * @returns {Object} { issues: Array, relationshipsChecked: number }
+     */
+    checkDomainRange(rdfGraph) {
+      const issues = [];
+      let relationshipsChecked = 0;
+
+      // Get all quads with CCO predicates that have constraints
+      const allQuads = rdfGraph.getQuads(null, null, null, null);
+
+      for (const quad of allQuads) {
+        const predicateIri = quad.predicate.value;
+        const constraint = PREDICATE_CONSTRAINTS[predicateIri];
+
+        // Skip predicates without constraints (rdf:type, rdfs:subClassOf, etc.)
+        if (!constraint) continue;
+
+        relationshipsChecked++;
+
+        const subjectIri = quad.subject.value;
+        const objectIri = quad.object.termType === 'NamedNode' ? quad.object.value : null;
+        const objectIsLiteral = quad.object.termType === 'Literal';
+
+        // Get types of subject
+        const subjectTypes = shaclValidator.helpers.getEntityTypes(rdfGraph, subjectIri);
+
+        // Check domain constraint (if not empty - empty means "any")
+        if (constraint.domain.length > 0) {
+          const domainValid = shaclValidator.helpers.isTypeCompatible(
+            rdfGraph,
+            subjectTypes,
+            constraint.domain
+          );
+
+          if (!domainValid && subjectTypes.length > 0) {
+            const subjectTypeName = shaclValidator.helpers.getShortIri(subjectTypes[0]);
+            const expectedDomain = constraint.domain
+              .map(d => shaclValidator.helpers.getShortIri(d))
+              .join(' or ');
+            const predicateName = shaclValidator.helpers.getPredicateName(predicateIri);
+
+            issues.push({
+              pattern: 'Domain/Range Validation',
+              rule: 'Domain Constraint',
+              severity: SEVERITY.WARNING,
+              subject: subjectIri,
+              message: `"${predicateName}" expects subject of type ${expectedDomain}, but found ${subjectTypeName}`,
+              explanation: `The predicate "${predicateName}" is designed for ${constraint.description}. ` +
+                `Using it with ${subjectTypeName} may be semantically incorrect.`,
+              fix: `Either change the subject to a ${expectedDomain}, or use a different predicate`,
+            });
+          }
+        }
+
+        // Check range constraint
+        if (constraint.range.length > 0) {
+          // Check if range expects Literal
+          if (constraint.range.includes('Literal')) {
+            if (!objectIsLiteral) {
+              const predicateName = shaclValidator.helpers.getPredicateName(predicateIri);
+              issues.push({
+                pattern: 'Domain/Range Validation',
+                rule: 'Range Constraint',
+                severity: SEVERITY.WARNING,
+                subject: objectIri || quad.object.value,
+                message: `"${predicateName}" expects a literal value, but found a named node`,
+                explanation: `The predicate "${predicateName}" should point to a literal value (text, number, date), ` +
+                  `not another entity.`,
+                fix: `Use a literal value like "text" or "123" instead of an entity reference`,
+              });
+            }
+          } else if (objectIri) {
+            // Range expects a specific type
+            const objectTypes = shaclValidator.helpers.getEntityTypes(rdfGraph, objectIri);
+            const rangeValid = shaclValidator.helpers.isTypeCompatible(
+              rdfGraph,
+              objectTypes,
+              constraint.range
+            );
+
+            if (!rangeValid && objectTypes.length > 0) {
+              const objectTypeName = shaclValidator.helpers.getShortIri(objectTypes[0]);
+              const expectedRange = constraint.range
+                .map(r => shaclValidator.helpers.getShortIri(r))
+                .join(' or ');
+              const predicateName = shaclValidator.helpers.getPredicateName(predicateIri);
+
+              issues.push({
+                pattern: 'Domain/Range Validation',
+                rule: 'Range Constraint',
+                severity: SEVERITY.WARNING,
+                subject: objectIri,
+                message: `"${predicateName}" expects object of type ${expectedRange}, but found ${objectTypeName}`,
+                explanation: `The predicate "${predicateName}" is designed for ${constraint.description}. ` +
+                  `Using it with ${objectTypeName} may be semantically incorrect.`,
+                fix: `Either change the object to a ${expectedRange}, or use a different predicate`,
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        issues,
+        relationshipsChecked,
+      };
+    },
+
+    /**
+     * Gets the types of an entity from the RDF graph
+     * @param {Store} rdfGraph - N3 Store
+     * @param {string} entityIri - Entity IRI
+     * @returns {Array<string>} Array of type IRIs
+     */
+    getEntityTypes(rdfGraph, entityIri) {
+      const typeQuads = rdfGraph.getQuads(entityIri, RDF_TYPE, null, null);
+      return typeQuads.map(q => q.object.value);
+    },
+
+    /**
+     * Checks if any of the entity's types are compatible with the constraint types
+     * Compatible means: exact match OR subclass of constraint type
+     *
+     * @param {Store} rdfGraph - N3 Store
+     * @param {Array<string>} entityTypes - Types of the entity
+     * @param {Array<string>} constraintTypes - Types allowed by constraint
+     * @returns {boolean} True if compatible
+     */
+    isTypeCompatible(rdfGraph, entityTypes, constraintTypes) {
+      if (entityTypes.length === 0) {
+        // No type info - can't validate, assume OK
+        return true;
+      }
+
+      for (const entityType of entityTypes) {
+        // Check exact match
+        if (constraintTypes.includes(entityType)) {
+          return true;
+        }
+
+        // Check if entity type is a subclass of any constraint type
+        for (const constraintType of constraintTypes) {
+          if (shaclValidator.helpers.isSubclassOf(rdfGraph, entityType, constraintType)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    },
+
+    /**
+     * Checks if classA is a subclass of classB (directly or transitively)
+     * Uses the subclass relationships in the RDF graph
+     *
+     * @param {Store} rdfGraph - N3 Store
+     * @param {string} classA - Potential subclass
+     * @param {string} classB - Potential superclass
+     * @returns {boolean} True if classA is subclass of classB
+     */
+    isSubclassOf(rdfGraph, classA, classB) {
+      const visited = new Set();
+      const queue = [classA];
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        if (current === classB) return true;
+
+        // Get superclasses of current
+        const superclassQuads = rdfGraph.getQuads(current, SUBCLASS_OF, null, null);
+        for (const quad of superclassQuads) {
+          queue.push(quad.object.value);
+        }
+      }
+
+      return false;
+    },
+
+    /**
+     * Gets a human-readable predicate name from a full IRI
+     * @param {string} predicateIri - Full predicate IRI
+     * @returns {string} Human-readable name (e.g., "is_bearer_of")
+     */
+    getPredicateName(predicateIri) {
+      const lastSlash = predicateIri.lastIndexOf('/');
+      const lastHash = predicateIri.lastIndexOf('#');
+      const splitIndex = Math.max(lastSlash, lastHash);
+      if (splitIndex > 0) {
+        return predicateIri.substring(splitIndex + 1);
+      }
+      return predicateIri;
+    },
+
+    /**
+     * Validates vocabulary usage in the RDF graph
+     * Checks for:
+     * 1. Classes that don't exist in CCO or BFO (validates class names, not just namespaces)
+     * 2. Predicates not in the known CCO/RDF/RDFS vocabulary
+     *
+     * This helps users catch:
+     * - Misspelled class names (e.g., "Persosn" instead of "Person")
+     * - Invalid namespace prefixes (e.g., "foo:RestRole")
+     * - Custom predicates that may not be recognized
+     *
+     * @param {Store} rdfGraph - N3 Store
+     * @returns {Object} { issues: Array, entitiesChecked: number, predicatesChecked: number }
+     */
+    checkVocabulary(rdfGraph) {
+      const issues = [];
+      const checkedEntities = new Set();
+      const checkedPredicates = new Set();
+      const unrecognizedEntities = new Set();
+      const unrecognizedPredicates = new Set();
+
+      // Get all quads in the graph
+      const allQuads = rdfGraph.getQuads(null, null, null, null);
+
+      for (const quad of allQuads) {
+        // Check subject (entity)
+        if (quad.subject.termType === 'NamedNode') {
+          const subjectIri = quad.subject.value;
+          if (!checkedEntities.has(subjectIri)) {
+            checkedEntities.add(subjectIri);
+            if (!shaclValidator.helpers.isKnownEntity(subjectIri)) {
+              unrecognizedEntities.add(subjectIri);
+            }
+          }
+        }
+
+        // Check predicate
+        const predicateIri = quad.predicate.value;
+        if (!checkedPredicates.has(predicateIri)) {
+          checkedPredicates.add(predicateIri);
+          if (!KNOWN_PREDICATES.has(predicateIri) && !shaclValidator.helpers.isKnownNamespace(predicateIri)) {
+            unrecognizedPredicates.add(predicateIri);
+          }
+        }
+
+        // Check object (if it's a named node, not a literal)
+        if (quad.object.termType === 'NamedNode') {
+          const objectIri = quad.object.value;
+          if (!checkedEntities.has(objectIri)) {
+            checkedEntities.add(objectIri);
+            if (!shaclValidator.helpers.isKnownEntity(objectIri)) {
+              unrecognizedEntities.add(objectIri);
+            }
+          }
+        }
+      }
+
+      // Create WARNING messages for unrecognized entities
+      // EXPERT REVIEW (2026-01-13): Elevated from INFO to WARNING per CCO expert.
+      // A typo like "cco:Persosn" represents a failure to ground the model in CCO's semantic space.
+      for (const entityIri of unrecognizedEntities) {
+        const classInfo = shaclValidator.helpers.getClassValidationInfo(entityIri);
+        issues.push({
+          pattern: 'Vocabulary Validation',
+          rule: classInfo.rule,
+          severity: SEVERITY.WARNING,
+          subject: entityIri,
+          message: classInfo.message,
+          explanation: classInfo.explanation,
+          fix: classInfo.fix,
+        });
+      }
+
+      // Create WARNING messages for unrecognized predicates
+      // EXPERT REVIEW (2026-01-13): Elevated from INFO to WARNING per CCO expert.
+      for (const predicateIri of unrecognizedPredicates) {
+        issues.push({
+          pattern: 'Vocabulary Validation',
+          rule: 'Unknown Predicate',
+          severity: SEVERITY.WARNING,
+          subject: predicateIri,
+          message: `Predicate "${shaclValidator.helpers.getDisplayIri(predicateIri)}" is not a recognized CCO/BFO/RDF property`,
+          explanation: 'This predicate is not in the list of known CCO, BFO, RDF, or RDFS properties. ' +
+            'It may be a custom property, a typo, or from a namespace not yet supported. ' +
+            'Pattern validation may not work correctly for relationships using this predicate.',
+          fix: `If this is intentional, you can ignore this message. Otherwise, use a recognized CCO predicate ` +
+            `(e.g., "is_bearer_of", "realizes", "concretizes", "designates")`,
+        });
+      }
+
+      return {
+        issues,
+        entitiesChecked: checkedEntities.size,
+        predicatesChecked: checkedPredicates.size,
+        unrecognizedEntityCount: unrecognizedEntities.size,
+        unrecognizedPredicateCount: unrecognizedPredicates.size,
+      };
+    },
+
+    /**
+     * Checks if an IRI belongs to a known namespace
+     * @param {string} iri - The IRI to check
+     * @returns {boolean} True if IRI is in a known namespace
+     */
+    isKnownNamespace(iri) {
+      for (const namespace of Object.values(KNOWN_NAMESPACES)) {
+        if (iri.startsWith(namespace)) {
+          return true;
+        }
+      }
+      // Also allow example.org for testing purposes
+      if (iri.startsWith('http://example.org/') || iri.startsWith('https://example.org/')) {
+        return true;
+      }
+      return false;
+    },
+
+    /**
+     * Checks if an entity IRI is a known CCO or BFO class
+     * Validates BOTH namespace AND class name
+     * @param {string} iri - The IRI to check
+     * @returns {boolean} True if IRI is a known entity
+     */
+    isKnownEntity(iri) {
+      // Allow example.org for testing (instance IRIs)
+      if (iri.startsWith('http://example.org/') || iri.startsWith('https://example.org/')) {
+        return true;
+      }
+
+      // Extract namespace and local part
+      const parsed = shaclValidator.helpers.parseIri(iri);
+      if (!parsed) return false;
+
+      const { namespace, localPart } = parsed;
+
+      // Check CCO namespaces
+      if (namespace === KNOWN_NAMESPACES.CCO ||
+          namespace === KNOWN_NAMESPACES.CCO_ALT ||
+          namespace === KNOWN_NAMESPACES.CCO_ALT_HTTP) {
+        return KNOWN_CCO_CLASSES.has(localPart);
+      }
+
+      // Check BFO namespace
+      if (namespace === KNOWN_NAMESPACES.BFO) {
+        return KNOWN_BFO_CLASSES.has(localPart);
+      }
+
+      // Check RDF/RDFS/OWL namespaces (always valid)
+      if (namespace === KNOWN_NAMESPACES.RDF ||
+          namespace === KNOWN_NAMESPACES.RDFS ||
+          namespace === KNOWN_NAMESPACES.OWL ||
+          namespace === KNOWN_NAMESPACES.XSD) {
+        return true;
+      }
+
+      // Unknown namespace
+      return false;
+    },
+
+    /**
+     * Parses an IRI into namespace and local part
+     * @param {string} iri - Full IRI
+     * @returns {Object|null} { namespace, localPart } or null if not parseable
+     */
+    parseIri(iri) {
+      if (!iri.includes('://')) return null;
+
+      const hashIndex = iri.lastIndexOf('#');
+      const slashIndex = iri.lastIndexOf('/');
+      const splitIndex = Math.max(hashIndex, slashIndex);
+
+      if (splitIndex > 0 && splitIndex < iri.length - 1) {
+        return {
+          namespace: iri.substring(0, splitIndex + 1),
+          localPart: iri.substring(splitIndex + 1),
+        };
+      }
+      return null;
+    },
+
+    /**
+     * Gets detailed validation info for an unrecognized entity
+     * @param {string} iri - The unrecognized IRI
+     * @returns {Object} { rule, message, explanation, fix }
+     */
+    getClassValidationInfo(iri) {
+      const parsed = shaclValidator.helpers.parseIri(iri);
+
+      if (!parsed) {
+        return {
+          rule: 'Invalid IRI',
+          message: `"${iri}" is not a valid IRI format`,
+          explanation: 'The IRI could not be parsed. It should be a full URL like http://example.org/ClassName.',
+          fix: 'Use a valid IRI format (e.g., "http://www.ontologyrepository.com/CommonCoreOntologies/Person")',
+        };
+      }
+
+      const { namespace, localPart } = parsed;
+
+      // Check if namespace is CCO but class doesn't exist
+      if (namespace === KNOWN_NAMESPACES.CCO ||
+          namespace === KNOWN_NAMESPACES.CCO_ALT ||
+          namespace === KNOWN_NAMESPACES.CCO_ALT_HTTP) {
+        return {
+          rule: 'Unknown CCO Class',
+          message: `Class "cco:${localPart}" does not exist in CCO vocabulary`,
+          explanation: `"${localPart}" is not a recognized CCO class. ` +
+            'This may be a typo (e.g., "Persosn" instead of "Person") or a class not yet supported. ' +
+            `Known CCO classes include: ${Array.from(KNOWN_CCO_CLASSES).slice(0, 5).join(', ')}, etc.`,
+          fix: `Check spelling of "${localPart}" or use a valid CCO class like Person, Role, Agent, Organization, etc.`,
+        };
+      }
+
+      // Check if namespace is BFO but class doesn't exist
+      if (namespace === KNOWN_NAMESPACES.BFO) {
+        return {
+          rule: 'Unknown BFO Class',
+          message: `Class "bfo:${localPart}" does not exist in BFO vocabulary`,
+          explanation: `"${localPart}" is not a recognized BFO class. ` +
+            'BFO classes use the format BFO_XXXXXXX (e.g., BFO_0000040 for Material Entity). ' +
+            `Known BFO classes include: ${Array.from(KNOWN_BFO_CLASSES).slice(0, 5).join(', ')}, etc.`,
+          fix: `Use a valid BFO class ID (e.g., BFO_0000040, BFO_0000023, BFO_0000015)`,
+        };
+      }
+
+      // Unknown namespace entirely
+      return {
+        rule: 'Unrecognized Namespace',
+        message: `Entity "${shaclValidator.helpers.getDisplayIri(iri)}" is not using a recognized CCO/BFO namespace`,
+        explanation: `This IRI uses namespace "${namespace}" which is not CCO or BFO. ` +
+          'The entity will not be validated against CCO patterns.',
+        fix: `Use CCO namespace (${KNOWN_NAMESPACES.CCO}) or BFO namespace (${KNOWN_NAMESPACES.BFO})`,
+      };
+    },
+
+    /**
+     * Gets a display-friendly version of an IRI
+     * Shows the full IRI for unrecognized namespaces, short form for known ones
+     * @param {string} iri - Full IRI
+     * @returns {string} Display-friendly IRI
+     */
+    getDisplayIri(iri) {
+      // For short IRIs that look like prefixed names (e.g., "foo:Bar"), show as-is
+      if (!iri.includes('://')) {
+        return iri;
+      }
+      // For full IRIs, show the last part after / or #
+      const hashIndex = iri.lastIndexOf('#');
+      const slashIndex = iri.lastIndexOf('/');
+      const splitIndex = Math.max(hashIndex, slashIndex);
+      if (splitIndex > 0 && splitIndex < iri.length - 1) {
+        const localPart = iri.substring(splitIndex + 1);
+        const prefix = iri.substring(0, splitIndex + 1);
+        // If it's a known namespace, use short form
+        if (prefix === KNOWN_NAMESPACES.CCO ||
+            prefix === KNOWN_NAMESPACES.CCO_ALT ||
+            prefix === KNOWN_NAMESPACES.CCO_ALT_HTTP) return `cco:${localPart}`;
+        if (prefix === KNOWN_NAMESPACES.BFO) return `bfo:${localPart}`;
+        if (prefix === KNOWN_NAMESPACES.RDF) return `rdf:${localPart}`;
+        if (prefix === KNOWN_NAMESPACES.RDFS) return `rdfs:${localPart}`;
+        // For unknown namespaces, show the full IRI
+        return iri;
+      }
+      return iri;
     },
 
     /**

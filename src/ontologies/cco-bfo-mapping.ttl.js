@@ -62,10 +62,19 @@ cco:Quality rdfs:subClassOf bfo:BFO_0000019.  # quality
 # Sites and Facilities
 cco:Site rdfs:subClassOf bfo:BFO_0000029.  # site
 cco:Facility rdfs:subClassOf cco:Site.
+cco:GeographicRegion rdfs:subClassOf bfo:BFO_0000029.  # site
 
 # Dispositions and Functions
 cco:Function rdfs:subClassOf bfo:BFO_0000034.  # function
 cco:Disposition rdfs:subClassOf bfo:BFO_0000016.  # disposition
+
+# Groups and Social Entities (EXPERT REVIEW 2026-01-13)
+# Updated per expert: BFO_0000027 (Object Aggregate) is more specific than BFO_0000040 (Material Entity)
+# Rationale: An Agent is typically an Object, so a group of them is an Object Aggregate
+cco:GroupOfAgents rdfs:subClassOf bfo:BFO_0000027.  # object aggregate
+
+# Directive Information (EXPERT REVIEW 2026-01-13)
+cco:DirectiveInformationContentEntity rdfs:subClassOf cco:InformationContentEntity.
 
 # BFO Temporal Regions (commonly referenced)
 bfo:TemporalInterval rdfs:subClassOf bfo:BFO_0000038.  # one-dimensional temporal region
@@ -83,6 +92,7 @@ export function isCCOClass(iri) {
 
 /**
  * List of CCO classes we support (for validation)
+ * EXPERT REVIEW (2026-01-13): Added GeographicRegion, GroupOfAgents, DirectiveInformationContentEntity
  */
 export const SUPPORTED_CCO_CLASSES = [
   'Person',
@@ -94,6 +104,7 @@ export const SUPPORTED_CCO_CLASSES = [
   'EmployeeRole',
   'InformationContentEntity',
   'DesignativeInformationContentEntity',
+  'DirectiveInformationContentEntity', // EXPERT REVIEW 2026-01-13
   'Name',
   'PersonName',
   'Identifier',
@@ -102,12 +113,22 @@ export const SUPPORTED_CCO_CLASSES = [
   'Document',
   'Record',
   'PersonNameRecord',
+  'PostalAddressRecord',
+  'PostalAddress',
   'Artifact',
   'Act',
   'IntentionalAct',
+  'ActOfOccupancy',
   'Quality',
   'Site',
   'Facility',
+  'House',
+  'Building',
+  'GeographicRegion', // EXPERT REVIEW 2026-01-13
+  'GroupOfAgents', // EXPERT REVIEW 2026-01-13
   'Function',
   'Disposition',
+  'TemporalInterval',
+  'QualityMeasurement',
+  'MeasurementUnit',
 ];
