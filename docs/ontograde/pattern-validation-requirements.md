@@ -629,18 +629,48 @@ Test coverage: 97.3%
    - Decision: Build dedicated pattern library browser
    - Rationale: Transparency and user education are critical for confidence
 
-4. ⏳ **Validation Profiles:** Strict vs permissive modes - need examples before deciding
-   - Status: Pending - will provide examples in design document
-   - Options to evaluate:
-     - Strict: All violations are errors, fail validation
-     - Permissive: Pattern violations are warnings, don't fail validation
-     - Custom: User can configure severity per pattern type
+4. ✅ **Validation Profiles:** Use BFO-principled severity levels (per expert review)
+   - Decision: Severity based on ontological necessity, not user preference
+   - See "CCO Expert Review Decisions" below for pattern-specific severities
+
+5. ✅ **CCO Alignment:** OntoGrade fills a gap - no official CCO SHACL exists
+   - Decision: Our shapes become the reference implementation
+   - Expert confirmed: "Your OntoGrade shapes are actually filling a vital gap for the community"
+
+6. ✅ **Type Validation:** YES - Validate relationship endpoint types
+   - Decision: Enforce domain/range constraints
+   - Example: `realizes` requires Process (subject) and RealizableEntity (object)
+   - Rationale: Prevents "diagonal errors" where users link incorrect types
+
+### CCO Expert Review Decisions (2026-01-09)
+
+**Pattern Severity Summary (Expert Recommendations):**
+
+| Pattern | Rule | Severity | Rationale |
+|---------|------|----------|-----------|
+| **Information Staircase** | ICE → is_concretized_by | **Warning** | ICE can exist abstractly (like a Law) |
+| **Information Staircase** | IBE → concretizes | **Warning** | Blank slate IBE is rarely intended |
+| **Role Pattern** | Entity → is_bearer_of → Role | **Violation** | Role CANNOT exist without bearer (BFO) |
+| **Role Pattern** | Process → realizes → Role | **Warning** | Dispositions can remain dormant (BFO) |
+| **Designation Pattern** | DesignativeICE → designates | **Violation** | Name that names nothing is not a name |
+| **Measurement Pattern** | All 3 components (Value/Unit/Quality) | **Violation** | Incomplete measurement is meaningless |
+| **Temporal Interval** | Start/End times | **Warning** | Ongoing processes may lack end time |
+| **Temporal Interval** | Start ≤ End | **Violation** | Backwards time is impossible |
+
+**New Pattern Added (Expert Recommendation):**
+- **Socio-Primal Pattern:** Agent participation in Acts with temporal grounding
+  - Critical for modeling organizational/social structures
+  - Was MISSING from our original pattern set
+
+**Key BFO Principles Applied:**
+1. **The Realization Fallacy:** A Disposition exists even if never realized (fire extinguisher role exists even if no fire occurs)
+2. **Bearer Necessity:** A Role CANNOT exist without a bearer - ontologically impossible
+3. **Open World vs Design:** ICE can exist abstractly, but for practical modeling, concretization is expected
 
 ### Open Questions
 
-1. **CCO Alignment:** Should we align with official CCO SHACL shapes if they exist?
-2. **Pattern Versioning:** How do we handle pattern evolution over time?
-3. **Multi-Ontology Support:** Should we support other ontologies beyond CCO/BFO in future?
+1. **Pattern Versioning:** How do we handle pattern evolution over time?
+2. **Multi-Ontology Support:** Should we support other ontologies beyond CCO/BFO in future?
 
 ---
 
