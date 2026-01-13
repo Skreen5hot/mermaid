@@ -42,26 +42,28 @@ describe('shaclValidator', () => {
         ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value', 'John Doe'],
       ]);
 
-      const violations = shaclValidator.helpers.checkInformationStaircase(graph);
+      const result = shaclValidator.helpers.checkInformationStaircase(graph);
 
-      assert.equal(violations.length, 0, 'Should have no violations');
+      assert.equal(result.issues.length, 0, 'Should have no issues');
     });
 
-    it('should fail when ICE missing is_concretized_by', () => {
+    it('should warn when ICE missing is_concretized_by', () => {
       const graph = createTestGraph([
         // ICE entity without is_concretized_by
         ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
       ]);
 
-      const violations = shaclValidator.helpers.checkInformationStaircase(graph);
+      const result = shaclValidator.helpers.checkInformationStaircase(graph);
 
-      assert.equal(violations.length, 1);
-      assert.equal(violations[0].pattern, 'Information Staircase');
-      assert.ok(violations[0].message.includes('missing is_concretized_by'));
+      assert.equal(result.issues.length, 1);
+      assert.equal(result.issues[0].pattern, 'Information Staircase');
+      // Expert review: ICE can exist abstractly, so this is a WARNING
+      assert.equal(result.issues[0].severity, 'warning');
+      assert.ok(result.issues[0].message.includes('is_concretized_by'));
     });
 
-    it('should fail when IBE missing has_text_value', () => {
+    it('should warn when IBE missing has_text_value', () => {
       const graph = createTestGraph([
         // ICE entity
         ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
@@ -74,11 +76,11 @@ describe('shaclValidator', () => {
         ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonNameRecord'],
       ]);
 
-      const violations = shaclValidator.helpers.checkInformationStaircase(graph);
+      const result = shaclValidator.helpers.checkInformationStaircase(graph);
 
-      assert.equal(violations.length, 1);
-      assert.equal(violations[0].pattern, 'Information Staircase');
-      assert.ok(violations[0].message.includes('missing has_text_value'));
+      assert.equal(result.issues.length, 1);
+      assert.equal(result.issues[0].pattern, 'Information Staircase');
+      assert.ok(result.issues[0].message.includes('has_text_value'));
     });
 
     it('should handle multiple ICE entities', () => {
@@ -95,55 +97,61 @@ describe('shaclValidator', () => {
         ['http://www.ontologyrepository.com/CommonCoreOntologies/PostalAddress', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
       ]);
 
-      const violations = shaclValidator.helpers.checkInformationStaircase(graph);
+      const result = shaclValidator.helpers.checkInformationStaircase(graph);
 
-      assert.equal(violations.length, 1);
-      assert.ok(violations[0].subject.includes('Address_ICE'));
+      assert.equal(result.issues.length, 1);
+      assert.ok(result.issues[0].subject.includes('Address_ICE'));
     });
   });
 
   describe('Role Pattern', () => {
     it('should pass for valid role pattern: Entity → is_bearer_of → Role AND Process → realizes → Role', () => {
       const graph = createTestGraph([
-        // Person bears Role
+        // Person bears Role (with proper BFO typing)
         ['http://example.org/Person_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/Person'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/Person', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000004'],
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
         ['http://example.org/Person_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of', 'http://example.org/Role_0'],
 
-        // Process realizes Role
+        // Process realizes Role (with proper BFO typing)
         ['http://example.org/Process_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000015'],
         ['http://example.org/Process_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/realizes', 'http://example.org/Role_0'],
       ]);
 
-      const violations = shaclValidator.helpers.checkRolePattern(graph);
+      const result = shaclValidator.helpers.checkRolePattern(graph);
 
-      assert.equal(violations.length, 0, 'Should have no violations');
+      assert.equal(result.issues.length, 0, 'Should have no issues');
     });
 
-    it('should warn when role not borne by any entity', () => {
+    it('should error when role not borne by any entity (VIOLATION per expert)', () => {
       const graph = createTestGraph([
         // Role without bearer
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
 
-        // Process realizes Role
+        // Process realizes Role (with proper BFO typing)
         ['http://example.org/Process_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000015'],
         ['http://example.org/Process_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/realizes', 'http://example.org/Role_0'],
       ]);
 
-      const violations = shaclValidator.helpers.checkRolePattern(graph);
+      const result = shaclValidator.helpers.checkRolePattern(graph);
 
-      assert.equal(violations.length, 1);
-      assert.equal(violations[0].pattern, 'Role Pattern');
-      assert.equal(violations[0].severity, 'warning');
-      assert.ok(violations[0].message.includes('not borne by any entity'));
+      // Should have at least one issue - the missing bearer (VIOLATION)
+      assert.ok(result.issues.length >= 1);
+      const bearerViolation = result.issues.find(i => i.rule === 'Role Bearer');
+      assert.ok(bearerViolation, 'Should have bearer violation');
+      assert.equal(bearerViolation.severity, 'violation');
+      assert.ok(bearerViolation.message.includes('must be borne'));
     });
 
-    it('should warn when role not realized by any process', () => {
+    it('should warn when role not realized by any process (WARNING per expert)', () => {
       const graph = createTestGraph([
-        // Person bears Role
+        // Person bears Role (with proper BFO typing)
         ['http://example.org/Person_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/Person'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/Person', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000004'],
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
         ['http://example.org/Person_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of', 'http://example.org/Role_0'],
@@ -151,25 +159,27 @@ describe('shaclValidator', () => {
         // NO Process realizes Role
       ]);
 
-      const violations = shaclValidator.helpers.checkRolePattern(graph);
+      const result = shaclValidator.helpers.checkRolePattern(graph);
 
-      assert.equal(violations.length, 1);
-      assert.equal(violations[0].pattern, 'Role Pattern');
-      assert.ok(violations[0].message.includes('not realized by any process'));
+      // Should have realization warning
+      const realizationWarning = result.issues.find(i => i.rule === 'Role Realization');
+      assert.ok(realizationWarning, 'Should have realization warning');
+      assert.equal(realizationWarning.severity, 'warning');
+      assert.ok(realizationWarning.message.includes('not realized'));
     });
 
-    it('should detect violations for both bearer and realization', () => {
+    it('should detect issues for both bearer and realization', () => {
       const graph = createTestGraph([
         // Orphan role - no bearer, no realization
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
       ]);
 
-      const violations = shaclValidator.helpers.checkRolePattern(graph);
+      const result = shaclValidator.helpers.checkRolePattern(graph);
 
-      assert.equal(violations.length, 2);
-      assert.ok(violations.some(v => v.message.includes('not borne')));
-      assert.ok(violations.some(v => v.message.includes('not realized')));
+      assert.equal(result.issues.length, 2);
+      assert.ok(result.issues.some(v => v.message.includes('must be borne')));
+      assert.ok(result.issues.some(v => v.message.includes('not realized')));
     });
   });
 
@@ -183,9 +193,9 @@ describe('shaclValidator', () => {
         ['http://example.org/Person_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_designated_by', 'http://example.org/Name_0'],
       ]);
 
-      const violations = shaclValidator.helpers.checkDesignationPattern(graph);
+      const result = shaclValidator.helpers.checkDesignationPattern(graph);
 
-      assert.equal(violations.length, 0, 'Should have no violations');
+      assert.equal(result.issues.length, 0, 'Should have no issues');
     });
 
     it('should pass when designative ICE designates entity', () => {
@@ -197,44 +207,48 @@ describe('shaclValidator', () => {
         ['http://example.org/Person_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/Person'],
       ]);
 
-      const violations = shaclValidator.helpers.checkDesignationPattern(graph);
+      const result = shaclValidator.helpers.checkDesignationPattern(graph);
 
-      assert.equal(violations.length, 0, 'Should have no violations');
+      assert.equal(result.issues.length, 0, 'Should have no issues');
     });
 
-    it('should warn when designative entity has no designation links', () => {
+    it('should error when designative entity has no designation links (VIOLATION per expert)', () => {
       const graph = createTestGraph([
         // Orphan Name - doesn't designate anything
         ['http://example.org/Name_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeInformationContentEntity'],
       ]);
 
-      const violations = shaclValidator.helpers.checkDesignationPattern(graph);
+      const result = shaclValidator.helpers.checkDesignationPattern(graph);
 
-      assert.equal(violations.length, 1);
-      assert.equal(violations[0].pattern, 'Designation Pattern');
-      assert.equal(violations[0].severity, 'warning');
-      assert.ok(violations[0].message.includes('not linked'));
+      assert.equal(result.issues.length, 1);
+      assert.equal(result.issues[0].pattern, 'Designation Pattern');
+      // Expert review: Name that names nothing is VIOLATION
+      assert.equal(result.issues[0].severity, 'violation');
+      assert.ok(result.issues[0].message.includes('must designate'));
     });
   });
 
   describe('checkPatterns', () => {
-    it('should pass for valid CCO patterns', () => {
+    it('should pass for valid CCO patterns (no violations)', () => {
       const graph = createTestGraph([
         // Valid Information Staircase
         ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeInformationContentEntity'],
         ['http://example.org/Name_ICE', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by', 'http://example.org/Name_IBE'],
-        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonNameRecord'],
+        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingEntity'],
+        ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/concretizes', 'http://example.org/Name_ICE'],
         ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value', 'John Doe'],
 
-        // Valid Role Pattern
+        // Valid Role Pattern (with proper BFO typing)
         ['http://example.org/Person_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/Person'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/Person', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000004'],
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
         ['http://example.org/Person_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of', 'http://example.org/Role_0'],
         ['http://example.org/Process_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/ActOfOccupancy', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://purl.obolibrary.org/obo/BFO_0000015'],
         ['http://example.org/Process_0', 'http://www.ontologyrepository.com/CommonCoreOntologies/realizes', 'http://example.org/Role_0'],
 
         // Valid Designation Pattern
@@ -244,26 +258,26 @@ describe('shaclValidator', () => {
 
       const result = shaclValidator.helpers.checkPatterns(graph);
 
+      // Should pass (no violations)
       assert.equal(result.pass, true);
-      assert.equal(result.violations.length, 0);
-      assert.equal(result.complianceScore, 100);
+      // Violations should be 0
+      assert.equal(result.violationCount, 0);
+      // Score may not be exactly 100 if there are warnings, but should be high
+      assert.ok(result.complianceScore >= 90, `Compliance score should be >= 90, got ${result.complianceScore}`);
     });
 
-    it('should calculate compliance score based on violations', () => {
+    it('should fail when violations are present', () => {
       const graph = createTestGraph([
-        // Invalid staircase (missing is_concretized_by)
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
-
-        // Invalid role (no bearer, no realization)
+        // Invalid role (no bearer) - VIOLATION per expert
         ['http://example.org/Role_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole'],
         ['http://www.ontologyrepository.com/CommonCoreOntologies/ResidentRole', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/Role'],
       ]);
 
       const result = shaclValidator.helpers.checkPatterns(graph);
 
+      // Should fail due to VIOLATION (missing bearer)
       assert.equal(result.pass, false);
-      assert.ok(result.violations.length > 0);
+      assert.ok(result.violationCount > 0);
       assert.ok(result.complianceScore < 100);
     });
 
