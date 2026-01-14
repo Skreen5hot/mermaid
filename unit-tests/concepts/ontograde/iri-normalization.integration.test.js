@@ -84,37 +84,9 @@ Person_0["Person<br>IRI: https://www.commoncoreontologies.org/Person"]`;
       assert.strictEqual(personQuads.length, 1, 'Current namespace should normalize');
     });
 
-    test('should accept module-specific CCO namespace (AgentOntology)', () => {
+    test('should accept full URL with numeric ID (base namespace)', () => {
       const mermaid = `graph TD
-Person_0["Person<br>IRI: https://www.commoncoreontologies.org/AgentOntology/Person"]`;
-
-      const store = mermaidLifter.helpers.liftToRDF(mermaid);
-
-      const personQuads = store.getQuads(
-        'http://example.org/Person_0',
-        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
-        'http://www.ontologyrepository.com/CommonCoreOntologies/Person'
-      );
-      assert.strictEqual(personQuads.length, 1, 'AgentOntology namespace should normalize');
-    });
-
-    test('should accept merged CCO namespace', () => {
-      const mermaid = `graph TD
-Person_0["Person<br>IRI: https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person"]`;
-
-      const store = mermaidLifter.helpers.liftToRDF(mermaid);
-
-      const personQuads = store.getQuads(
-        'http://example.org/Person_0',
-        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
-        'http://www.ontologyrepository.com/CommonCoreOntologies/Person'
-      );
-      assert.strictEqual(personQuads.length, 1, 'Merged namespace should normalize');
-    });
-
-    test('should accept full URL with numeric ID', () => {
-      const mermaid = `graph TD
-Person_0["Person<br>IRI: https://www.commoncoreontologies.org/AgentOntology/ont00001262"]`;
+Person_0["Person<br>IRI: https://www.commoncoreontologies.org/ont00001262"]`;
 
       const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -223,15 +195,26 @@ Person_0["Person<br>IRI: http://www.ontologyrepositroy.com/CommonCoreOntologies/
       assert.ok(result.unrecognizedEntityCount > 0, 'Typo in namespace should be flagged');
     });
 
-    test('should reject non-existent module namespace', () => {
+    test('should reject module-path IRIs (module paths are metadata, not entity IRIs)', () => {
       const mermaid = `graph TD
-Person_0["Person<br>IRI: https://www.commoncoreontologies.org/FakeOntology/Person"]`;
+Person_0["Person<br>IRI: https://www.commoncoreontologies.org/AgentOntology/Person"]`;
 
       const store = mermaidLifter.helpers.liftToRDF(mermaid);
       const result = shaclValidator.helpers.checkVocabulary(store);
 
-      // FakeOntology is not in CCO_NAMESPACE_VARIANTS, so won't be recognized
-      assert.ok(result.unrecognizedEntityCount > 0, 'Fake module namespace should be flagged');
+      // Module paths like AgentOntology/ are NOT valid entity IRIs
+      assert.ok(result.unrecognizedEntityCount > 0, 'Module-path IRI should be flagged as invalid');
+    });
+
+    test('should reject merged module-path IRIs', () => {
+      const mermaid = `graph TD
+Person_0["Person<br>IRI: https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person"]`;
+
+      const store = mermaidLifter.helpers.liftToRDF(mermaid);
+      const result = shaclValidator.helpers.checkVocabulary(store);
+
+      // Merged module paths are NOT valid entity IRIs
+      assert.ok(result.unrecognizedEntityCount > 0, 'Merged module-path IRI should be flagged');
     });
 
     test('should handle nodes without IRI (defaults to example.org)', () => {
@@ -280,14 +263,14 @@ Person_0["Person<br>IRI: cco:ont00001262"]`;
       assert.ok(result.pass, 'Numeric ID should normalize and pass BFO rooting');
     });
 
-    test('should pass BFO rooting for module-specific namespace', () => {
+    test('should pass BFO rooting for base namespace with numeric ID', () => {
       const mermaid = `graph TD
-Person_0["Person<br>IRI: https://www.commoncoreontologies.org/AgentOntology/Person"]`;
+Person_0["Person<br>IRI: https://www.commoncoreontologies.org/ont00001262"]`;
 
       const store = mermaidLifter.helpers.liftToRDF(mermaid);
       const result = bfoValidator.helpers.checkRooting(store);
 
-      assert.ok(result.pass, 'Module-specific namespace should normalize and pass');
+      assert.ok(result.pass, 'Base namespace with numeric ID should normalize and pass');
     });
 
   });
@@ -321,11 +304,11 @@ Person_0 -->|participates_in| Act_0`;
       );
     });
 
-    test('complete diagram with mixed formats should score well', () => {
+    test('complete diagram with mixed valid formats should score well', () => {
       const mermaid = `graph TD
 Person_0["Person<br>IRI: cco:Person"]
 Role_0["ResidentRole<br>IRI: https://www.commoncoreontologies.org/ResidentRole"]
-Act_0["ActOfOccupancy<br>IRI: https://www.commoncoreontologies.org/EventOntology/ActOfOccupancy"]
+Act_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
 TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
 Person_0 -->|is_bearer_of| Role_0
 Act_0 -->|realizes| Role_0
@@ -338,14 +321,14 @@ TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
 
       // Check BFO rooting
       const bfoResult = bfoValidator.helpers.checkRooting(store);
-      assert.ok(bfoResult.pass, 'Mixed format classes should all be rooted');
+      assert.ok(bfoResult.pass, 'All valid format classes should be rooted');
 
       // Check vocabulary
       const vocabResult = shaclValidator.helpers.checkVocabulary(store);
       assert.strictEqual(
         vocabResult.unrecognizedEntityCount,
         0,
-        'Mixed formats should all be recognized'
+        'Valid formats should all be recognized'
       );
     });
 

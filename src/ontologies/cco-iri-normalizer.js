@@ -17,25 +17,23 @@
  */
 
 // Canonical CCO namespace (used internally for consistency)
+// CCO 2.0+ uses: https://www.commoncoreontologies.org/
+// Legacy uses: http://www.ontologyrepository.com/CommonCoreOntologies/
+// We normalize to legacy for backwards compatibility with existing cco-bfo-mapping.ttl.js
 export const CANONICAL_CCO_NAMESPACE = 'http://www.ontologyrepository.com/CommonCoreOntologies/';
 
 // All recognized CCO namespace variants
+// IMPORTANT: In CCO 2.0+, entity IRIs use the BASE namespace directly:
+//   https://www.commoncoreontologies.org/ont00001262
+// The module paths (AgentOntology, EventOntology, etc.) are NOT part of entity IRIs.
+// They are metadata indicating which module defines the entity.
 export const CCO_NAMESPACE_VARIANTS = [
+  // Legacy namespace
   'http://www.ontologyrepository.com/CommonCoreOntologies/',
   'https://www.ontologyrepository.com/CommonCoreOntologies/',
+  // Current CCO 2.0+ namespace (entities use this directly)
   'https://www.commoncoreontologies.org/',
   'http://www.commoncoreontologies.org/',
-  'https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/',
-  'http://www.commoncoreontologies.org/CommonCoreOntologiesMerged/',
-  'https://www.commoncoreontologies.org/AgentOntology/',
-  'https://www.commoncoreontologies.org/EventOntology/',
-  'https://www.commoncoreontologies.org/InformationEntityOntology/',
-  'https://www.commoncoreontologies.org/ArtifactOntology/',
-  'https://www.commoncoreontologies.org/QualityOntology/',
-  'https://www.commoncoreontologies.org/UnitsOfMeasureOntology/',
-  'https://www.commoncoreontologies.org/TimeOntology/',
-  'https://www.commoncoreontologies.org/GeospatialOntology/',
-  'https://www.commoncoreontologies.org/FacilityOntology/',
 ];
 
 // Prefix mappings

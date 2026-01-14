@@ -29,14 +29,12 @@ describe('CCO IRI Normalizer', () => {
       assert.ok(isCCOIri('https://www.commoncoreontologies.org/ont00001262'));
     });
 
-    test('should recognize module-specific CCO namespaces', () => {
-      assert.ok(isCCOIri('https://www.commoncoreontologies.org/AgentOntology/Person'));
-      assert.ok(isCCOIri('https://www.commoncoreontologies.org/EventOntology/Act'));
-      assert.ok(isCCOIri('https://www.commoncoreontologies.org/InformationEntityOntology/InformationContentEntity'));
-    });
-
-    test('should recognize merged CCO namespace', () => {
-      assert.ok(isCCOIri('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'));
+    test('should NOT recognize module-specific paths as CCO IRIs (module paths are metadata, not entity IRIs)', () => {
+      // In CCO 2.0+, entity IRIs use https://www.commoncoreontologies.org/ont##### directly
+      // Module paths like AgentOntology/ are metadata, NOT part of entity IRIs
+      assert.strictEqual(isCCOIri('https://www.commoncoreontologies.org/AgentOntology/Person'), false);
+      assert.strictEqual(isCCOIri('https://www.commoncoreontologies.org/EventOntology/Act'), false);
+      assert.strictEqual(isCCOIri('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'), false);
     });
 
     test('should reject non-CCO IRIs', () => {
@@ -64,9 +62,15 @@ describe('CCO IRI Normalizer', () => {
         'Person'
       );
       assert.strictEqual(
-        extractLocalPart('https://www.commoncoreontologies.org/AgentOntology/Person'),
-        'Person'
+        extractLocalPart('https://www.commoncoreontologies.org/ont00001262'),
+        'ont00001262'
       );
+    });
+
+    test('should return null for module-specific paths (not valid entity IRIs)', () => {
+      // Module paths are metadata, not entity IRIs
+      assert.strictEqual(extractLocalPart('https://www.commoncoreontologies.org/AgentOntology/Person'), null);
+      assert.strictEqual(extractLocalPart('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'), null);
     });
 
     test('should return null for non-CCO IRIs', () => {
@@ -113,23 +117,21 @@ describe('CCO IRI Normalizer', () => {
       );
     });
 
-    test('should normalize module-specific namespace to canonical', () => {
+    test('should NOT normalize module-specific paths (they are invalid entity IRIs)', () => {
+      // Module paths are metadata, not entity IRIs - they should be returned unchanged
       assert.strictEqual(
         normalizeCCOIri('https://www.commoncoreontologies.org/AgentOntology/Person'),
-        `${CANONICAL_CCO_NAMESPACE}Person`
+        'https://www.commoncoreontologies.org/AgentOntology/Person'
       );
-    });
-
-    test('should normalize merged namespace to canonical', () => {
       assert.strictEqual(
         normalizeCCOIri('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'),
-        `${CANONICAL_CCO_NAMESPACE}Person`
+        'https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'
       );
     });
 
-    test('should normalize full URL with numeric ID', () => {
+    test('should normalize numeric ID from current namespace', () => {
       assert.strictEqual(
-        normalizeCCOIri('https://www.commoncoreontologies.org/AgentOntology/ont00001262'),
+        normalizeCCOIri('https://www.commoncoreontologies.org/ont00001262'),
         `${CANONICAL_CCO_NAMESPACE}Person`
       );
     });
@@ -154,7 +156,7 @@ describe('CCO IRI Normalizer', () => {
       ));
       assert.ok(areSameCCOClass(
         'http://www.ontologyrepository.com/CommonCoreOntologies/Person',
-        'https://www.commoncoreontologies.org/AgentOntology/Person'
+        'https://www.commoncoreontologies.org/Person'
       ));
     });
 
@@ -171,6 +173,14 @@ describe('CCO IRI Normalizer', () => {
 
     test('should reject different classes', () => {
       assert.strictEqual(areSameCCOClass('cco:Person', 'cco:Agent'), false);
+    });
+
+    test('should reject module-path IRIs (invalid entity format)', () => {
+      // Module paths are not valid entity IRIs
+      assert.strictEqual(areSameCCOClass(
+        'cco:Person',
+        'https://www.commoncoreontologies.org/AgentOntology/Person'
+      ), false);
     });
   });
 
@@ -203,14 +213,16 @@ describe('CCO IRI Normalizer', () => {
   });
 
   describe('getEquivalentIris', () => {
-    test('should return all variants for Person', () => {
+    test('should return valid variants for Person', () => {
       const equivalents = getEquivalentIris('Person');
 
-      // Should include multiple namespace variants
+      // Should include valid namespace variants
       assert.ok(equivalents.includes('http://www.ontologyrepository.com/CommonCoreOntologies/Person'));
       assert.ok(equivalents.includes('https://www.commoncoreontologies.org/Person'));
-      assert.ok(equivalents.includes('https://www.commoncoreontologies.org/AgentOntology/Person'));
-      assert.ok(equivalents.includes('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'));
+
+      // Should NOT include module-path variants (those are invalid)
+      assert.strictEqual(equivalents.includes('https://www.commoncoreontologies.org/AgentOntology/Person'), false);
+      assert.strictEqual(equivalents.includes('https://www.commoncoreontologies.org/CommonCoreOntologiesMerged/Person'), false);
 
       // Should include numeric ID variants
       assert.ok(equivalents.some(iri => iri.includes('ont00001262')));
