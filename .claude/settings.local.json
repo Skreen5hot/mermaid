@@ -32,7 +32,8 @@
       "Bash(del nul)",
       "Bash(git rm:*)",
       "Bash(npm run test:ontograde:patterns:*)",
-      "Bash(npm run test:ontograde:logic:*)"
+      "Bash(npm run test:ontograde:logic:*)",
+      "Bash(git push:*)"
     ]
   }
 }

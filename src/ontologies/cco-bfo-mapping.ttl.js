@@ -76,8 +76,8 @@ cco:GroupOfAgents rdfs:subClassOf bfo:BFO_0000027.  # object aggregate
 # Directive Information (EXPERT REVIEW 2026-01-13)
 cco:DirectiveInformationContentEntity rdfs:subClassOf cco:InformationContentEntity.
 
-# BFO Temporal Regions (commonly referenced)
-bfo:TemporalInterval rdfs:subClassOf bfo:BFO_0000038.  # one-dimensional temporal region
+# Temporal Regions (commonly referenced)
+cco:TemporalInterval rdfs:subClassOf bfo:BFO_0000038.  # one-dimensional temporal region
 
 # Generic subclasses for common patterns
 # (Add more as needed for test fixtures)

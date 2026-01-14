@@ -16,6 +16,7 @@
 
 import { isCCOClass, SUPPORTED_CCO_CLASSES } from '../../ontologies/cco-bfo-mapping.ttl.js';
 import { BFO_LABELS } from '../../ontologies/bfo-core.ttl.js';
+import { bfoValidator } from './bfoValidator.js';
 
 // CCO/BFO IRIs
 const CCO = 'http://www.ontologyrepository.com/CommonCoreOntologies/';
@@ -1036,9 +1037,10 @@ export const shaclValidator = {
 
     /**
      * Checks if classA is a subclass of classB (directly or transitively)
-     * Uses the subclass relationships in the RDF graph
+     * Uses the subclass relationships in BOTH the user's RDF graph AND the
+     * CCO/BFO reference ontology (from bfoValidator.state.referenceStore)
      *
-     * @param {Store} rdfGraph - N3 Store
+     * @param {Store} rdfGraph - N3 Store (user's graph)
      * @param {string} classA - Potential subclass
      * @param {string} classB - Potential superclass
      * @returns {boolean} True if classA is subclass of classB
@@ -1047,6 +1049,9 @@ export const shaclValidator = {
       const visited = new Set();
       const queue = [classA];
 
+      // Get reference store if available (contains CCO/BFO subclass hierarchy)
+      const referenceStore = bfoValidator.state.referenceStore;
+
       while (queue.length > 0) {
         const current = queue.shift();
         if (visited.has(current)) continue;
@@ -1054,10 +1059,21 @@ export const shaclValidator = {
 
         if (current === classB) return true;
 
-        // Get superclasses of current
-        const superclassQuads = rdfGraph.getQuads(current, SUBCLASS_OF, null, null);
-        for (const quad of superclassQuads) {
+        // Get superclasses from user's graph
+        const userSuperclassQuads = rdfGraph.getQuads(current, SUBCLASS_OF, null, null);
+        for (const quad of userSuperclassQuads) {
           queue.push(quad.object.value);
+        }
+
+        // Also get superclasses from reference ontology (CCO/BFO hierarchy)
+        if (referenceStore) {
+          const refSuperclassQuads = referenceStore.getQuads(current, SUBCLASS_OF, null, null);
+          for (const quad of refSuperclassQuads) {
+            // Skip blank nodes
+            if (!quad.object.value.startsWith('_:')) {
+              queue.push(quad.object.value);
+            }
+          }
         }
       }
 
