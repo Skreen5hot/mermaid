@@ -11,14 +11,45 @@ const { namedNode, literal, quad } = DataFactory;
 const subscribers = new Set();
 
 /**
- * Maps CCO predicates to their expected XSD datatypes
+ * Standard ontology prefix mappings
+ * Used for expanding prefixed IRIs to full URIs
+ */
+const STANDARD_PREFIXES = {
+  // Ontology namespaces
+  'cco': 'http://www.ontologyrepository.com/CommonCoreOntologies/',
+  'CCO': 'http://www.ontologyrepository.com/CommonCoreOntologies/',
+  'bfo': 'http://purl.obolibrary.org/obo/',
+  'obo': 'http://purl.obolibrary.org/obo/',
+  'ro': 'http://purl.obolibrary.org/obo/',  // OBO Relations use same namespace
+
+  // Standard vocabularies
+  'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
+  'owl': 'http://www.w3.org/2002/07/owl#',
+  'xsd': 'http://www.w3.org/2001/XMLSchema#',
+  'xml': 'http://www.w3.org/XML/1998/namespace',
+
+  // Dublin Core
+  'dc': 'http://purl.org/dc/terms/',
+  'dc11': 'http://purl.org/dc/elements/1.1/',
+
+  // SKOS
+  'skos': 'http://www.w3.org/2004/02/skos/core#',
+
+  // Testing
+  'ex': 'http://example.org/',
+};
+
+/**
+ * Maps predicate IRIs to their expected XSD datatypes
  * Used when creating literal triples to add proper datatype annotations
  */
 const PREDICATE_DATATYPES = {
-  'has_start_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
-  'has_end_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
-  'has_text_value': 'http://www.w3.org/2001/XMLSchema#string',
-  'has_measurement_value': 'http://www.w3.org/2001/XMLSchema#decimal',
+  // CCO temporal predicates
+  'http://www.ontologyrepository.com/CommonCoreOntologies/has_start_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
+  'http://www.ontologyrepository.com/CommonCoreOntologies/has_end_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
+  'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value': 'http://www.w3.org/2001/XMLSchema#string',
+  'http://www.ontologyrepository.com/CommonCoreOntologies/has_measurement_value': 'http://www.w3.org/2001/XMLSchema#decimal',
 };
 
 /**
@@ -140,14 +171,17 @@ export const mermaidLifter = {
           );
         }
 
-        // Edge definition with literal: TI_0 -->|has_start_time| "2026-01-01T00:00:00"
-        // Pattern: Subject -->|predicate| "literal_value"
-        const literalEdgeMatch = line.match(/(\w+)\s*-->?\s*\|([^|]+)\|\s*"([^"]+)"/);
-        if (literalEdgeMatch) {
-          const [, subject, predicate, literalValue] = literalEdgeMatch;
+        // Edge definition with literal (new format): TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-01T00:00:00"
+        // Pattern: Subject -->|"label<br>IRI: prefix:localPart"| "literal_value"
+        const literalEdgeMatchNew = line.match(/(\w+)\s*-->?\s*\|"([^"]+)"\|\s*"([^"]+)"/);
+        if (literalEdgeMatchNew) {
+          const [, subject, predicateLabel, literalValue] = literalEdgeMatchNew;
+
+          // Extract IRI from predicate label
+          const predicateIri = mermaidLifter.helpers.extractPredicateIRI(predicateLabel);
 
           // Get datatype for this predicate (if known)
-          const datatype = PREDICATE_DATATYPES[predicate];
+          const datatype = PREDICATE_DATATYPES[predicateIri];
 
           // Create literal with or without datatype
           const literalNode = datatype
@@ -156,20 +190,24 @@ export const mermaidLifter = {
 
           store.addQuad(
             namedNode(`http://example.org/${subject}`),
-            namedNode(`http://www.ontologyrepository.com/CommonCoreOntologies/${predicate}`),
+            namedNode(predicateIri),
             literalNode
           );
           continue; // Don't try to match as regular edge
         }
 
-        // Edge definition: Person_0 -->|is_bearer_of| Role_0
-        const edgeMatch = line.match(/(\w+)\s*-->?\s*\|([^|]+)\|\s*(\w+)/);
-        if (edgeMatch) {
-          const [, subject, predicate, object] = edgeMatch;
+        // Edge definition (new format): Person_0 -->|"participates in<br>IRI: bfo:BFO_0000056"| Act_0
+        // Pattern: Subject -->|"label<br>IRI: prefix:localPart"| Object
+        const edgeMatchNew = line.match(/(\w+)\s*-->?\s*\|"([^"]+)"\|\s*(\w+)/);
+        if (edgeMatchNew) {
+          const [, subject, predicateLabel, object] = edgeMatchNew;
+
+          // Extract IRI from predicate label
+          const predicateIri = mermaidLifter.helpers.extractPredicateIRI(predicateLabel);
 
           store.addQuad(
             namedNode(`http://example.org/${subject}`),
-            namedNode(`http://www.ontologyrepository.com/CommonCoreOntologies/${predicate}`),
+            namedNode(predicateIri),
             namedNode(`http://example.org/${object}`)
           );
         }
@@ -184,9 +222,26 @@ export const mermaidLifter = {
     },
 
     /**
+     * Extracts and expands the IRI from a predicate label
+     * @param {string} predicateLabel - Label like "participates in<br>IRI: bfo:BFO_0000056"
+     * @returns {string} Full expanded IRI
+     */
+    extractPredicateIRI(predicateLabel) {
+      // Extract IRI from label (after "IRI: ")
+      const iriMatch = predicateLabel.match(/IRI:\s*(\S+)/);
+      if (iriMatch) {
+        return mermaidLifter.helpers.expandIRI(iriMatch[1]);
+      }
+
+      // Fallback: use the label itself as a CCO predicate name (for backwards compatibility during transition)
+      const label = predicateLabel.split('<br>')[0].trim().replace(/\s+/g, '_');
+      return `http://www.ontologyrepository.com/CommonCoreOntologies/${label}`;
+    },
+
+    /**
      * Expands abbreviated IRI prefixes to full URIs
      * Handles CCO IRI variants including numeric IDs (ont#####)
-     * @param {string} iri - Abbreviated IRI (e.g., "cco:Person", "cco:ont00001262")
+     * @param {string} iri - Abbreviated IRI (e.g., "cco:Person", "cco:ont00001262", "bfo:BFO_0000056")
      * @returns {string} Full URI (normalized for CCO)
      */
     expandIRI(iri) {
@@ -201,25 +256,18 @@ export const mermaidLifter = {
         return normalizedCCO;
       }
 
-      const prefixes = {
-        'bfo': 'http://purl.obolibrary.org/obo/',
-        'ex': 'http://example.org/',
-        'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-        'rdfs': 'http://www.w3.org/2000/01/rdf-schema#',
-      };
-
       // Check if IRI has a prefix
       const colonIndex = iri.indexOf(':');
       if (colonIndex > 0) {
         const prefix = iri.substring(0, colonIndex);
         const localPart = iri.substring(colonIndex + 1);
 
-        if (prefixes[prefix]) {
-          return prefixes[prefix] + localPart;
+        if (STANDARD_PREFIXES[prefix]) {
+          return STANDARD_PREFIXES[prefix] + localPart;
         }
       }
 
-      // If no prefix or unknown prefix, return as-is
+      // If no prefix or unknown prefix, return as-is (might be a full IRI)
       return iri;
     },
 

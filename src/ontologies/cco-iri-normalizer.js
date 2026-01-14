@@ -110,10 +110,41 @@ export const CCO_NAME_TO_ID = Object.fromEntries(
   Object.entries(CCO_ID_TO_NAME).map(([id, name]) => [name, id])
 );
 
+// Module paths that are metadata, NOT part of entity IRIs
+// These appear in some CCO documentation but are NOT valid entity IRI paths
+const INVALID_MODULE_PATHS = [
+  'AgentOntology/',
+  'EventOntology/',
+  'ArtifactOntology/',
+  'InformationEntityOntology/',
+  'QualityOntology/',
+  'TimeOntology/',
+  'GeospatialOntology/',
+  'UnitsOntology/',
+  'ExtendedRelationOntology/',
+  'CommonCoreOntologiesMerged/',
+];
+
+/**
+ * Checks if a local part contains an invalid module path
+ * @param {string} localPart - The local part after the namespace
+ * @returns {boolean} True if it contains a module path (invalid)
+ */
+function hasModulePath(localPart) {
+  if (!localPart) return false;
+  for (const modulePath of INVALID_MODULE_PATHS) {
+    if (localPart.startsWith(modulePath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Checks if an IRI uses any CCO namespace variant
+ * Returns false for module-path IRIs (they are metadata, not entity IRIs)
  * @param {string} iri - The IRI to check
- * @returns {boolean} True if IRI is a CCO IRI
+ * @returns {boolean} True if IRI is a valid CCO entity IRI
  */
 export function isCCOIri(iri) {
   if (!iri) return false;
@@ -126,6 +157,12 @@ export function isCCOIri(iri) {
   // Check full namespace variants
   for (const namespace of CCO_NAMESPACE_VARIANTS) {
     if (iri.startsWith(namespace)) {
+      // Extract local part and check for module paths
+      const localPart = iri.substring(namespace.length);
+      if (hasModulePath(localPart)) {
+        // Module paths are NOT valid entity IRIs
+        return false;
+      }
       return true;
     }
   }
@@ -135,8 +172,9 @@ export function isCCOIri(iri) {
 
 /**
  * Extracts the local part (class name or ID) from a CCO IRI
+ * Returns null for module-path IRIs (they are invalid entity IRIs)
  * @param {string} iri - The CCO IRI
- * @returns {string|null} The local part or null if not a CCO IRI
+ * @returns {string|null} The local part or null if not a valid CCO IRI
  */
 export function extractLocalPart(iri) {
   if (!iri) return null;
@@ -152,7 +190,12 @@ export function extractLocalPart(iri) {
   // Handle full namespace variants
   for (const namespace of CCO_NAMESPACE_VARIANTS) {
     if (iri.startsWith(namespace)) {
-      return iri.substring(namespace.length);
+      const localPart = iri.substring(namespace.length);
+      // Reject module paths - they are not valid entity IRIs
+      if (hasModulePath(localPart)) {
+        return null;
+      }
+      return localPart;
     }
   }
 

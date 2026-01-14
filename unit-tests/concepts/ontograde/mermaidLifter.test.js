@@ -47,11 +47,11 @@ Role_0["ResidentRole<br>IRI: cco:ResidentRole"]`;
     assert.strictEqual(personQuads.length, 1, 'Person_0 should be typed as cco:Person');
   });
 
-  test('liftToRDF should parse edges correctly', () => {
+  test('liftToRDF should parse edges with explicit IRI correctly', () => {
     const mermaid = `graph TD
 Person_0["Person<br>IRI: cco:Person"]
 Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
-Person_0 -->|is_bearer_of| Role_0`;
+Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -61,6 +61,38 @@ Person_0 -->|is_bearer_of| Role_0`;
       'http://example.org/Role_0'
     );
     assert.strictEqual(bearerQuads.length, 1, 'Should have is_bearer_of relationship');
+  });
+
+  test('liftToRDF should parse BFO predicate IRIs correctly', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Act_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+Person_0 -->|"participates in<br>IRI: bfo:BFO_0000056"| Act_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const participatesQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://purl.obolibrary.org/obo/BFO_0000056',
+      'http://example.org/Act_0'
+    );
+    assert.strictEqual(participatesQuads.length, 1, 'Should have BFO participates_in relationship');
+  });
+
+  test('liftToRDF should parse full URL predicate IRIs correctly', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Act_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+Person_0 -->|"participates in<br>IRI: http://purl.obolibrary.org/obo/BFO_0000056"| Act_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const participatesQuads = store.getQuads(
+      'http://example.org/Person_0',
+      'http://purl.obolibrary.org/obo/BFO_0000056',
+      'http://example.org/Act_0'
+    );
+    assert.strictEqual(participatesQuads.length, 1, 'Should parse full URL predicate IRI');
   });
 
   test('liftToRDF should handle nodes without explicit IRI', () => {
@@ -220,8 +252,8 @@ Person_0["Person<br>IRI: cco:Person"]`;
 Person_0["Person<br>IRI: cco:Person"]
 Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
 Process_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
-Person_0 -->|is_bearer_of| Role_0
-Process_0 -->|realizes| Role_0`;
+Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0
+Process_0 -->|"realizes<br>IRI: cco:realizes"| Role_0`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -244,11 +276,11 @@ Process_0 -->|realizes| Role_0`;
     assert.strictEqual(realizes.length, 1, 'Should have realizes edge');
   });
 
-  test('liftToRDF should parse literal edges with quoted values', () => {
+  test('liftToRDF should parse literal edges with explicit IRI', () => {
     const mermaid = `graph TD
 TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
-TI_0 -->|has_start_time| "2026-01-01T00:00:00"
-TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
+TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-01T00:00:00"
+TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-12-31T23:59:59"`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -276,7 +308,7 @@ TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
   test('liftToRDF should add xsd:dateTime datatype for temporal predicates', () => {
     const mermaid = `graph TD
 TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
-TI_0 -->|has_start_time| "2026-01-01T00:00:00"`;
+TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-01T00:00:00"`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -296,7 +328,7 @@ TI_0 -->|has_start_time| "2026-01-01T00:00:00"`;
   test('liftToRDF should add xsd:string datatype for has_text_value', () => {
     const mermaid = `graph TD
 IBE_0["InformationBearingEntity<br>IRI: cco:InformationBearingEntity"]
-IBE_0 -->|has_text_value| "John Doe"`;
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| "John Doe"`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -317,7 +349,7 @@ IBE_0 -->|has_text_value| "John Doe"`;
   test('liftToRDF should add xsd:decimal datatype for has_measurement_value', () => {
     const mermaid = `graph TD
 QM_0["QualityMeasurement<br>IRI: cco:QualityMeasurement"]
-QM_0 -->|has_measurement_value| "42.5"`;
+QM_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| "42.5"`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
@@ -335,30 +367,38 @@ QM_0 -->|has_measurement_value| "42.5"`;
     );
   });
 
-  test('liftToRDF should handle mixed object and literal edges', () => {
+  test('liftToRDF should handle mixed object and literal edges with explicit IRIs', () => {
     const mermaid = `graph TD
 Person_0["Person<br>IRI: cco:Person"]
 Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
 Act_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
 TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
-Person_0 -->|is_bearer_of| Role_0
-Act_0 -->|realizes| Role_0
-Act_0 -->|occurs_during| TI_0
-TI_0 -->|has_start_time| "2026-01-01T00:00:00"
-TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
+Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0
+Act_0 -->|"realizes<br>IRI: cco:realizes"| Role_0
+Act_0 -->|"occurs during<br>IRI: bfo:BFO_0000199"| TI_0
+TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-01T00:00:00"
+TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-12-31T23:59:59"`;
 
     const store = mermaidLifter.helpers.liftToRDF(mermaid);
 
     // Should have 4 nodes (type + label each = 8) + 3 object edges + 2 literal edges = 13 triples
     assert.ok(store.size >= 13, 'Should have at least 13 triples');
 
-    // Verify object edges
+    // Verify CCO object edge
     const bearerEdge = store.getQuads(
       'http://example.org/Person_0',
       'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of',
       'http://example.org/Role_0'
     );
     assert.strictEqual(bearerEdge.length, 1, 'Should have is_bearer_of edge');
+
+    // Verify BFO object edge
+    const occursDuringEdge = store.getQuads(
+      'http://example.org/Act_0',
+      'http://purl.obolibrary.org/obo/BFO_0000199',
+      'http://example.org/TI_0'
+    );
+    assert.strictEqual(occursDuringEdge.length, 1, 'Should have BFO occurs_during edge');
 
     // Verify literal edges
     const startTimeQuads = store.getQuads(
@@ -368,5 +408,43 @@ TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
     );
     assert.strictEqual(startTimeQuads.length, 1, 'Should have has_start_time literal');
     assert.strictEqual(startTimeQuads[0].object.termType, 'Literal', 'Should be a literal');
+  });
+
+  test('extractPredicateIRI should extract IRI from predicate label', () => {
+    const label1 = 'participates in<br>IRI: bfo:BFO_0000056';
+    const iri1 = mermaidLifter.helpers.extractPredicateIRI(label1);
+    assert.strictEqual(iri1, 'http://purl.obolibrary.org/obo/BFO_0000056', 'Should extract BFO IRI');
+
+    const label2 = 'is bearer of<br>IRI: cco:is_bearer_of';
+    const iri2 = mermaidLifter.helpers.extractPredicateIRI(label2);
+    assert.strictEqual(iri2, 'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of', 'Should extract CCO IRI');
+
+    const label3 = 'type<br>IRI: rdf:type';
+    const iri3 = mermaidLifter.helpers.extractPredicateIRI(label3);
+    assert.strictEqual(iri3, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'Should extract RDF IRI');
+  });
+
+  test('expandIRI should expand all standard prefixes', () => {
+    // Test various prefixes
+    assert.strictEqual(
+      mermaidLifter.helpers.expandIRI('owl:Class'),
+      'http://www.w3.org/2002/07/owl#Class',
+      'Should expand owl: prefix'
+    );
+    assert.strictEqual(
+      mermaidLifter.helpers.expandIRI('skos:Concept'),
+      'http://www.w3.org/2004/02/skos/core#Concept',
+      'Should expand skos: prefix'
+    );
+    assert.strictEqual(
+      mermaidLifter.helpers.expandIRI('dc:title'),
+      'http://purl.org/dc/terms/title',
+      'Should expand dc: prefix'
+    );
+    assert.strictEqual(
+      mermaidLifter.helpers.expandIRI('obo:RO_0000052'),
+      'http://purl.obolibrary.org/obo/RO_0000052',
+      'Should expand obo: prefix'
+    );
   });
 });
