@@ -352,6 +352,7 @@ export const shaclValidator = {
 
       // Calculate unknown percentage for display
       const totalEntities = vocabularyResult.entitiesChecked;
+      const totalPredicates = vocabularyResult.predicatesChecked;
       const unknownEntities = vocabularyResult.unrecognizedEntityCount;
       const unknownPredicates = vocabularyResult.unrecognizedPredicateCount;
 
@@ -367,8 +368,12 @@ export const shaclValidator = {
           patternsChecked.push('Domain/Range Validation');
         }
       }
-      const unknownPercentage = totalEntities > 0
-        ? Math.round((unknownEntities / totalEntities) * 100)
+
+      // Calculate unknown percentage including BOTH entities AND predicates
+      const totalItems = totalEntities + totalPredicates;
+      const unknownItems = unknownEntities + unknownPredicates;
+      const unknownPercentage = totalItems > 0
+        ? Math.round((unknownItems / totalItems) * 100)
         : 0;
 
       // Separate violations from warnings
@@ -403,14 +408,17 @@ export const shaclValidator = {
         // NEW: Unknown vocabulary tracking
         vocabularyStatus: {
           totalEntities,
+          totalPredicates,
+          totalItems,
           unknownEntities,
           unknownPredicates,
+          unknownItems,
           unknownPercentage,
           hasUnknownVocabulary,
-          recognizedPercentage: totalEntities > 0 ? 100 - unknownPercentage : 100,
+          recognizedPercentage: totalItems > 0 ? 100 - unknownPercentage : 100,
         },
         message: hasUnknownVocabulary
-          ? `${unknownPercentage}% of entities use unrecognized vocabulary`
+          ? `${unknownPercentage}% unrecognized (${unknownEntities} entities, ${unknownPredicates} predicates)`
           : violations.length === 0 && warnings.length === 0
             ? 'All CCO patterns are valid'
             : violations.length > 0

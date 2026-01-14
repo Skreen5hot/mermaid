@@ -92,8 +92,11 @@ export const gradingEngine = {
       // Get vocabulary status from pattern validation
       const vocabStatus = patterns.vocabularyStatus || {
         totalEntities: 0,
+        totalPredicates: 0,
+        totalItems: 0,
         unknownEntities: 0,
         unknownPredicates: 0,
+        unknownItems: 0,
         unknownPercentage: 0,
         hasUnknownVocabulary: false,
         recognizedPercentage: 100,
@@ -140,10 +143,11 @@ export const gradingEngine = {
       let bfoSummary, logicSummary, patternSummary;
 
       if (vocabStatus.hasUnknownVocabulary) {
-        // When vocabulary is unrecognized, all validators show "Unknown"
-        bfoSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
-        logicSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
-        patternSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`;
+        // When vocabulary is unrecognized, show Unknown with details
+        const unknownDetail = `${vocabStatus.unknownEntities} entities, ${vocabStatus.unknownPredicates} predicates`;
+        bfoSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized: ${unknownDetail})`;
+        logicSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized: ${unknownDetail})`;
+        patternSummary = `Unknown (${vocabStatus.unknownPercentage}% unrecognized: ${unknownDetail})`;
       } else {
         bfoSummary = bfo.pass ? 'Pass' : `Partial (${bfo.rootedClasses}/${bfo.totalClasses} classes rooted)`;
         logicSummary = logic.pass ? 'Pass' : `Partial (${logic.inconsistencies.length} inconsistencies)`;
@@ -186,6 +190,8 @@ export const gradingEngine = {
         finalScore: vocabStatus.hasUnknownVocabulary ? null : Math.round(finalScore * 10) / 10,
         hasUnknownVocabulary: vocabStatus.hasUnknownVocabulary,
         unknownPercentage: vocabStatus.unknownPercentage,
+        unknownEntities: vocabStatus.unknownEntities,
+        unknownPredicates: vocabStatus.unknownPredicates,
         breakdown,
         summary,
         violations,
@@ -197,7 +203,7 @@ export const gradingEngine = {
       gradingEngine.state.scoreResults.set(diagramId, scoreResult);
 
       if (vocabStatus.hasUnknownVocabulary) {
-        console.log(`[gradingEngine] Score: UNKNOWN (${vocabStatus.unknownPercentage}% unrecognized vocabulary)`);
+        console.log(`[gradingEngine] Score: UNKNOWN (${vocabStatus.unknownPercentage}% unrecognized: ${vocabStatus.unknownEntities} entities, ${vocabStatus.unknownPredicates} predicates)`);
       } else {
         console.log(`[gradingEngine] Final score calculated: ${scoreResult.finalScore}/5.0`);
       }

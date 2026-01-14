@@ -530,7 +530,8 @@ describe('shaclValidator', () => {
 
       const result = shaclValidator.helpers.checkPatterns(graph);
 
-      assert.ok(result.message.includes('unrecognized vocabulary'), `Message should mention unrecognized vocabulary: ${result.message}`);
+      // New message format: "X% unrecognized (Y entities, Z predicates)"
+      assert.ok(result.message.includes('unrecognized'), `Message should mention unrecognized: ${result.message}`);
     });
   });
 
