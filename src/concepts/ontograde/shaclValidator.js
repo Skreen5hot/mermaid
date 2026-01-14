@@ -17,6 +17,7 @@
 import { isCCOClass, SUPPORTED_CCO_CLASSES } from '../../ontologies/cco-bfo-mapping.ttl.js';
 import { BFO_LABELS } from '../../ontologies/bfo-core.ttl.js';
 import { bfoValidator } from './bfoValidator.js';
+import { isCCOIri, normalizeCCOIri, extractLocalPart, CCO_NAMESPACE_VARIANTS } from '../../ontologies/cco-iri-normalizer.js';
 
 // CCO/BFO IRIs
 const CCO = 'http://www.ontologyrepository.com/CommonCoreOntologies/';
@@ -1196,10 +1197,17 @@ export const shaclValidator = {
 
     /**
      * Checks if an IRI belongs to a known namespace
+     * Supports all CCO IRI variants
      * @param {string} iri - The IRI to check
      * @returns {boolean} True if IRI is in a known namespace
      */
     isKnownNamespace(iri) {
+      // Check CCO namespace variants (from normalizer)
+      if (isCCOIri(iri)) {
+        return true;
+      }
+
+      // Check other known namespaces
       for (const namespace of Object.values(KNOWN_NAMESPACES)) {
         if (iri.startsWith(namespace)) {
           return true;
@@ -1215,6 +1223,7 @@ export const shaclValidator = {
     /**
      * Checks if an entity IRI is a known CCO or BFO class
      * Validates BOTH namespace AND class name
+     * Supports all CCO IRI variants including numeric IDs (ont#####)
      * @param {string} iri - The IRI to check
      * @returns {boolean} True if IRI is a known entity
      */
@@ -1224,18 +1233,24 @@ export const shaclValidator = {
         return true;
       }
 
-      // Extract namespace and local part
+      // Check if it's any CCO IRI variant (including numeric IDs)
+      if (isCCOIri(iri)) {
+        // Extract and normalize the local part
+        const localPart = extractLocalPart(iri);
+        if (!localPart) return false;
+
+        // Handle numeric IDs by normalizing first
+        const normalizedIri = normalizeCCOIri(iri);
+        const normalizedLocal = extractLocalPart(normalizedIri);
+
+        return KNOWN_CCO_CLASSES.has(normalizedLocal || localPart);
+      }
+
+      // Extract namespace and local part for non-CCO IRIs
       const parsed = shaclValidator.helpers.parseIri(iri);
       if (!parsed) return false;
 
       const { namespace, localPart } = parsed;
-
-      // Check CCO namespaces
-      if (namespace === KNOWN_NAMESPACES.CCO ||
-          namespace === KNOWN_NAMESPACES.CCO_ALT ||
-          namespace === KNOWN_NAMESPACES.CCO_ALT_HTTP) {
-        return KNOWN_CCO_CLASSES.has(localPart);
-      }
 
       // Check BFO namespace
       if (namespace === KNOWN_NAMESPACES.BFO) {

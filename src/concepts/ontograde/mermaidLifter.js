@@ -4,6 +4,7 @@
  */
 
 import { Parser, Store, Writer, DataFactory } from 'n3';
+import { normalizeCCOIri, expandCCOPrefix, CANONICAL_CCO_NAMESPACE } from '../../ontologies/cco-iri-normalizer.js';
 
 const { namedNode, literal, quad } = DataFactory;
 
@@ -184,12 +185,23 @@ export const mermaidLifter = {
 
     /**
      * Expands abbreviated IRI prefixes to full URIs
-     * @param {string} iri - Abbreviated IRI (e.g., "cco:Person")
-     * @returns {string} Full URI
+     * Handles CCO IRI variants including numeric IDs (ont#####)
+     * @param {string} iri - Abbreviated IRI (e.g., "cco:Person", "cco:ont00001262")
+     * @returns {string} Full URI (normalized for CCO)
      */
     expandIRI(iri) {
+      // Handle CCO IRIs specially (supports numeric IDs and all namespace variants)
+      if (iri.startsWith('cco:') || iri.startsWith('CCO:')) {
+        return expandCCOPrefix(iri);
+      }
+
+      // Handle full CCO namespace variants
+      const normalizedCCO = normalizeCCOIri(iri);
+      if (normalizedCCO !== iri) {
+        return normalizedCCO;
+      }
+
       const prefixes = {
-        'cco': 'http://www.ontologyrepository.com/CommonCoreOntologies/',
         'bfo': 'http://purl.obolibrary.org/obo/',
         'ex': 'http://example.org/',
         'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
