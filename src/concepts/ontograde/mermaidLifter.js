@@ -10,6 +10,17 @@ const { namedNode, literal, quad } = DataFactory;
 const subscribers = new Set();
 
 /**
+ * Maps CCO predicates to their expected XSD datatypes
+ * Used when creating literal triples to add proper datatype annotations
+ */
+const PREDICATE_DATATYPES = {
+  'has_start_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
+  'has_end_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
+  'has_text_value': 'http://www.w3.org/2001/XMLSchema#string',
+  'has_measurement_value': 'http://www.w3.org/2001/XMLSchema#decimal',
+};
+
+/**
  * Notifies all subscribed listeners of an event.
  * @param {string} event - The name of the event.
  * @param {*} payload - The data associated with the event.
@@ -96,6 +107,11 @@ export const mermaidLifter = {
           continue;
         }
 
+        // Skip subgraph declarations and end statements
+        if (line.trim().startsWith('subgraph') || line.trim() === 'end') {
+          continue;
+        }
+
         // Node definition: Person_0["Person<br>IRI: cco:Person"]
         const nodeMatch = line.match(/(\w+)\["([^"]+)"\]/);
         if (nodeMatch) {
@@ -121,6 +137,28 @@ export const mermaidLifter = {
             namedNode('http://www.w3.org/2000/01/rdf-schema#label'),
             literal(type)
           );
+        }
+
+        // Edge definition with literal: TI_0 -->|has_start_time| "2026-01-01T00:00:00"
+        // Pattern: Subject -->|predicate| "literal_value"
+        const literalEdgeMatch = line.match(/(\w+)\s*-->?\s*\|([^|]+)\|\s*"([^"]+)"/);
+        if (literalEdgeMatch) {
+          const [, subject, predicate, literalValue] = literalEdgeMatch;
+
+          // Get datatype for this predicate (if known)
+          const datatype = PREDICATE_DATATYPES[predicate];
+
+          // Create literal with or without datatype
+          const literalNode = datatype
+            ? literal(literalValue, namedNode(datatype))
+            : literal(literalValue);
+
+          store.addQuad(
+            namedNode(`http://example.org/${subject}`),
+            namedNode(`http://www.ontologyrepository.com/CommonCoreOntologies/${predicate}`),
+            literalNode
+          );
+          continue; // Don't try to match as regular edge
         }
 
         // Edge definition: Person_0 -->|is_bearer_of| Role_0

@@ -243,4 +243,130 @@ Process_0 -->|realizes| Role_0`;
     );
     assert.strictEqual(realizes.length, 1, 'Should have realizes edge');
   });
+
+  test('liftToRDF should parse literal edges with quoted values', () => {
+    const mermaid = `graph TD
+TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
+TI_0 -->|has_start_time| "2026-01-01T00:00:00"
+TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check has_start_time literal
+    const startTimeQuads = store.getQuads(
+      'http://example.org/TI_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_start_time',
+      null
+    );
+    assert.strictEqual(startTimeQuads.length, 1, 'Should have has_start_time relationship');
+    assert.strictEqual(startTimeQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(startTimeQuads[0].object.value, '2026-01-01T00:00:00', 'Literal value should match');
+
+    // Check has_end_time literal
+    const endTimeQuads = store.getQuads(
+      'http://example.org/TI_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_end_time',
+      null
+    );
+    assert.strictEqual(endTimeQuads.length, 1, 'Should have has_end_time relationship');
+    assert.strictEqual(endTimeQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(endTimeQuads[0].object.value, '2026-12-31T23:59:59', 'Literal value should match');
+  });
+
+  test('liftToRDF should add xsd:dateTime datatype for temporal predicates', () => {
+    const mermaid = `graph TD
+TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
+TI_0 -->|has_start_time| "2026-01-01T00:00:00"`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const startTimeQuads = store.getQuads(
+      'http://example.org/TI_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_start_time',
+      null
+    );
+    assert.strictEqual(startTimeQuads.length, 1, 'Should have has_start_time relationship');
+    assert.strictEqual(
+      startTimeQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#dateTime',
+      'Should have xsd:dateTime datatype'
+    );
+  });
+
+  test('liftToRDF should add xsd:string datatype for has_text_value', () => {
+    const mermaid = `graph TD
+IBE_0["InformationBearingEntity<br>IRI: cco:InformationBearingEntity"]
+IBE_0 -->|has_text_value| "John Doe"`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const textValueQuads = store.getQuads(
+      'http://example.org/IBE_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value',
+      null
+    );
+    assert.strictEqual(textValueQuads.length, 1, 'Should have has_text_value relationship');
+    assert.strictEqual(textValueQuads[0].object.value, 'John Doe', 'Literal value should match');
+    assert.strictEqual(
+      textValueQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#string',
+      'Should have xsd:string datatype'
+    );
+  });
+
+  test('liftToRDF should add xsd:decimal datatype for has_measurement_value', () => {
+    const mermaid = `graph TD
+QM_0["QualityMeasurement<br>IRI: cco:QualityMeasurement"]
+QM_0 -->|has_measurement_value| "42.5"`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    const measurementQuads = store.getQuads(
+      'http://example.org/QM_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_measurement_value',
+      null
+    );
+    assert.strictEqual(measurementQuads.length, 1, 'Should have has_measurement_value relationship');
+    assert.strictEqual(measurementQuads[0].object.value, '42.5', 'Literal value should match');
+    assert.strictEqual(
+      measurementQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#decimal',
+      'Should have xsd:decimal datatype'
+    );
+  });
+
+  test('liftToRDF should handle mixed object and literal edges', () => {
+    const mermaid = `graph TD
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["ResidentRole<br>IRI: cco:ResidentRole"]
+Act_0["ActOfOccupancy<br>IRI: cco:ActOfOccupancy"]
+TI_0["TemporalInterval<br>IRI: cco:TemporalInterval"]
+Person_0 -->|is_bearer_of| Role_0
+Act_0 -->|realizes| Role_0
+Act_0 -->|occurs_during| TI_0
+TI_0 -->|has_start_time| "2026-01-01T00:00:00"
+TI_0 -->|has_end_time| "2026-12-31T23:59:59"`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Should have 4 nodes (type + label each = 8) + 3 object edges + 2 literal edges = 13 triples
+    assert.ok(store.size >= 13, 'Should have at least 13 triples');
+
+    // Verify object edges
+    const bearerEdge = store.getQuads(
+      'http://example.org/Person_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/is_bearer_of',
+      'http://example.org/Role_0'
+    );
+    assert.strictEqual(bearerEdge.length, 1, 'Should have is_bearer_of edge');
+
+    // Verify literal edges
+    const startTimeQuads = store.getQuads(
+      'http://example.org/TI_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_start_time',
+      null
+    );
+    assert.strictEqual(startTimeQuads.length, 1, 'Should have has_start_time literal');
+    assert.strictEqual(startTimeQuads[0].object.termType, 'Literal', 'Should be a literal');
+  });
 });

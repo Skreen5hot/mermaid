@@ -690,8 +690,8 @@ export const shaclValidator = {
             severity: SEVERITY.WARNING,
             subject: intervalEntity,
             message: `TemporalInterval ${shaclValidator.helpers.getShortIri(intervalEntity)} should have a has_start_time relationship`,
-            explanation: 'If the start time is unknown, consider using an approximation or leaving undetermined.',
-            fix: `Add: ${shaclValidator.helpers.getShortIri(intervalEntity)} → has_start_time → [TemporalInstant]`,
+            explanation: 'Use literal syntax: TI -->|has_start_time| "2026-01-01T00:00:00"',
+            fix: `Add: ${shaclValidator.helpers.getShortIri(intervalEntity)} -->|has_start_time| "YYYY-MM-DDTHH:MM:SS"`,
           });
         }
 
@@ -703,8 +703,8 @@ export const shaclValidator = {
             severity: SEVERITY.WARNING,
             subject: intervalEntity,
             message: `TemporalInterval ${shaclValidator.helpers.getShortIri(intervalEntity)} should have a has_end_time relationship`,
-            explanation: 'For ongoing processes, the end time may be left undefined.',
-            fix: `Add: ${shaclValidator.helpers.getShortIri(intervalEntity)} → has_end_time → [TemporalInstant]`,
+            explanation: 'Use literal syntax: TI -->|has_end_time| "2026-12-31T23:59:59"',
+            fix: `Add: ${shaclValidator.helpers.getShortIri(intervalEntity)} -->|has_end_time| "YYYY-MM-DDTHH:MM:SS"`,
           });
         }
 
