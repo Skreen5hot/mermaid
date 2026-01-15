@@ -39,14 +39,16 @@ describe('bfoValidator', () => {
       assert.ok(bfoValidator.state.referenceStore.size > 0, 'Store should have triples');
     });
 
-    it('should load ontology in less than 100ms', async () => {
+    it('should load ontology in less than 500ms', async () => {
       // Re-initialize to test performance
+      // Note: Increased threshold to 500ms to accommodate auto-generated BFO mapping
+      // with 2850+ classes (was 100ms for manual 30-class mapping)
       bfoValidator.state.initialized = false;
       const start = Date.now();
       await bfoValidator.actions.initialize();
       const elapsed = Date.now() - start;
 
-      assert.ok(elapsed < 100, `Should load in <100ms, took ${elapsed}ms`);
+      assert.ok(elapsed < 500, `Should load in <500ms, took ${elapsed}ms`);
     });
 
     it('should emit bfoInitialized event', async () => {
