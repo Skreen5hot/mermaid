@@ -14,7 +14,17 @@
  *
  * This module normalizes all variants to the canonical form:
  * http://www.ontologyrepository.com/CommonCoreOntologies/{ClassName}
+ *
+ * NOTE: ID-to-name mappings are auto-generated from CCO ontology files.
+ * Regenerate with: node scripts/extract-cco-classes.js
  */
+
+// Import auto-generated mappings (regenerate with scripts/extract-cco-classes.js)
+import {
+  CCO_ID_TO_CLASS_NAME as GENERATED_CCO_ID_TO_CLASS_NAME,
+  CCO_ID_TO_PREDICATE_NAME as GENERATED_CCO_ID_TO_PREDICATE_NAME,
+  CCO_CLASS_NAME_TO_ID as GENERATED_CCO_CLASS_NAME_TO_ID,
+} from './cco-classes.generated.js';
 
 // Canonical CCO namespace (used internally for consistency)
 // CCO 2.0+ uses: https://www.commoncoreontologies.org/
@@ -44,71 +54,17 @@ export const CCO_PREFIXES = {
 
 /**
  * Maps CCO numeric IDs (ont#####) to human-readable class names
- * Source: CCO 2.0 ontology files
+ * Source: Auto-generated from CCO 2.0 ontology files
  *
- * This is a subset of commonly used classes. The full mapping would
- * require parsing the complete CCO ontology files.
+ * This mapping is automatically generated from the CCO ontology TTL files.
+ * Regenerate with: node scripts/extract-cco-classes.js
+ *
+ * Total mappings: ~1400+ numeric IDs from CCO 2.0 modules
  */
-export const CCO_ID_TO_NAME = {
-  // Agents (from AgentOntology)
-  'ont00001262': 'Person',
-  'ont00000821': 'Agent',
-  'ont00001180': 'Organization',
-  'ont00001715': 'GroupOfAgents',
+export const CCO_ID_TO_NAME = GENERATED_CCO_ID_TO_CLASS_NAME;
 
-  // Roles
-  'ont00000834': 'Role',
-  'ont00001647': 'ResidentRole',
-  'ont00001234': 'StudentRole',
-  'ont00001567': 'EmployeeRole',
-
-  // Information Entities
-  'ont00000958': 'InformationContentEntity',
-  'ont00001023': 'InformationBearingEntity',
-  'ont00000645': 'DesignativeInformationContentEntity',
-  'ont00001456': 'DirectiveInformationContentEntity',
-  'ont00000789': 'Name',
-  'ont00001345': 'PersonName',
-  'ont00000567': 'Identifier',
-  'ont00001890': 'PostalAddress',
-  'ont00000912': 'InformationBearingArtifact',
-  'ont00001678': 'Document',
-  'ont00000456': 'Record',
-  'ont00001234': 'PersonNameRecord',
-  'ont00000678': 'PostalAddressRecord',
-
-  // Artifacts
-  'ont00000543': 'Artifact',
-
-  // Acts/Processes
-  'ont00001098': 'Act',
-  'ont00000765': 'IntentionalAct',
-  'ont00001432': 'ActOfOccupancy',
-
-  // Qualities
-  'ont00000876': 'Quality',
-  'ont00001543': 'QualityMeasurement',
-  'ont00000234': 'MeasurementUnit',
-
-  // Sites/Facilities
-  'ont00001321': 'Site',
-  'ont00000987': 'Facility',
-  'ont00001654': 'House',
-  'ont00000345': 'Building',
-  'ont00001789': 'GeographicRegion',
-
-  // Functions/Dispositions
-  'ont00000432': 'Function',
-  'ont00001098': 'Disposition',
-
-  // Temporal
-  'ont00001567': 'TemporalInterval',
-};
-
-// Reverse mapping: name to ID
-export const CCO_NAME_TO_ID = Object.fromEntries(
-  Object.entries(CCO_ID_TO_NAME).map(([id, name]) => [name, id])
-);
+// Reverse mapping: name to ID (auto-generated)
+export const CCO_NAME_TO_ID = GENERATED_CCO_CLASS_NAME_TO_ID;
 
 // Module paths that are metadata, NOT part of entity IRIs
 // These appear in some CCO documentation but are NOT valid entity IRI paths

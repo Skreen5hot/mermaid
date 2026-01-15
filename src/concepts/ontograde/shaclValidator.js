@@ -18,6 +18,7 @@ import { isCCOClass, SUPPORTED_CCO_CLASSES } from '../../ontologies/cco-bfo-mapp
 import { BFO_LABELS } from '../../ontologies/bfo-core.ttl.js';
 import { bfoValidator } from './bfoValidator.js';
 import { isCCOIri, normalizeCCOIri, extractLocalPart, CCO_NAMESPACE_VARIANTS } from '../../ontologies/cco-iri-normalizer.js';
+import { CCO_CLASS_SET, CCO_PREDICATE_SET, isValidCCOClass, isValidCCOPredicate, normalizeCCOTerm } from '../../ontologies/cco-classes.generated.js';
 
 // CCO/BFO IRIs
 const CCO = 'http://www.ontologyrepository.com/CommonCoreOntologies/';
@@ -219,7 +220,9 @@ const KNOWN_PREDICATES = new Set([
 ]);
 
 // Known CCO class names (local part after namespace)
-const KNOWN_CCO_CLASSES = new Set(SUPPORTED_CCO_CLASSES);
+// Uses auto-generated CCO_CLASS_SET from cco-classes.generated.js
+// Falls back to SUPPORTED_CCO_CLASSES for backwards compatibility
+const KNOWN_CCO_CLASSES = CCO_CLASS_SET.size > 0 ? CCO_CLASS_SET : new Set(SUPPORTED_CCO_CLASSES);
 
 // Known BFO class names (local part after namespace, e.g., "BFO_0000040")
 const KNOWN_BFO_CLASSES = new Set(Object.keys(BFO_LABELS));
@@ -1144,7 +1147,9 @@ export const shaclValidator = {
         const predicateIri = quad.predicate.value;
         if (!checkedPredicates.has(predicateIri)) {
           checkedPredicates.add(predicateIri);
-          if (!KNOWN_PREDICATES.has(predicateIri) && !shaclValidator.helpers.isKnownNamespace(predicateIri)) {
+          if (!KNOWN_PREDICATES.has(predicateIri) &&
+              !shaclValidator.helpers.isKnownPredicate(predicateIri) &&
+              !shaclValidator.helpers.isKnownNamespace(predicateIri)) {
             unrecognizedPredicates.add(predicateIri);
           }
         }
@@ -1243,15 +1248,18 @@ export const shaclValidator = {
 
       // Check if it's any CCO IRI variant (including numeric IDs)
       if (isCCOIri(iri)) {
-        // Extract and normalize the local part
+        // Extract the local part
         const localPart = extractLocalPart(iri);
         if (!localPart) return false;
 
-        // Handle numeric IDs by normalizing first
-        const normalizedIri = normalizeCCOIri(iri);
-        const normalizedLocal = extractLocalPart(normalizedIri);
+        // Check directly against generated class set (includes numeric IDs)
+        if (KNOWN_CCO_CLASSES.has(localPart)) return true;
 
-        return KNOWN_CCO_CLASSES.has(normalizedLocal || localPart);
+        // Also check normalized form (converts ont##### to class name)
+        const normalized = normalizeCCOTerm(localPart);
+        if (KNOWN_CCO_CLASSES.has(normalized)) return true;
+
+        return false;
       }
 
       // Extract namespace and local part for non-CCO IRIs
@@ -1274,6 +1282,29 @@ export const shaclValidator = {
       }
 
       // Unknown namespace
+      return false;
+    },
+
+    /**
+     * Checks if a predicate IRI is a known CCO predicate
+     * Uses auto-generated CCO_PREDICATE_SET from cco-classes.generated.js
+     * @param {string} iri - The predicate IRI to check
+     * @returns {boolean} True if IRI is a known CCO predicate
+     */
+    isKnownPredicate(iri) {
+      // Check if it's a CCO IRI
+      if (isCCOIri(iri)) {
+        const localPart = extractLocalPart(iri);
+        if (!localPart) return false;
+
+        // Check against generated predicate set
+        if (CCO_PREDICATE_SET.has(localPart)) return true;
+
+        // Also try normalizing (for numeric IDs)
+        const normalized = normalizeCCOTerm(localPart);
+        if (CCO_PREDICATE_SET.has(normalized)) return true;
+      }
+
       return false;
     },
 
