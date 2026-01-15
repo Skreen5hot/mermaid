@@ -10,9 +10,13 @@
  * - CCO 1.x: http://www.ontologyrepository.com/CommonCoreOntologies/ClassName
  * - CCO 2.0+: https://www.commoncoreontologies.org/ont##### with rdfs:label
  *
+ * Primary source for numeric ID mappings:
+ * - src/ontologies/iri-mapping-v2.0.csv (authoritative mapping from CCO project)
+ *
  * Input:
  *   - src/ontologies/MergedAllCoreOntology-v1.5-2024-02-14.ttl (legacy, named classes)
  *   - src/ontologies/AgentOntology.ttl, EventOntology.ttl, etc. (CCO 2.0, numeric IDs)
+ *   - src/ontologies/iri-mapping-v2.0.csv (numeric ID to class name mapping)
  *
  * Output: src/ontologies/cco-classes.generated.js
  *
@@ -121,8 +125,52 @@ function cleanLabel(label, isClass = true) {
   }
 }
 
+/**
+ * Load the IRI mapping CSV file to get authoritative numeric ID -> class name mappings
+ * Format: old-iri,new-iri
+ * Example: http://www.ontologyrepository.com/CommonCoreOntologies/ActOfEmployment,https://www.commoncoreontologies.org/ont00001226
+ */
+function loadIriMappingCsv(csvPath) {
+  const mapping = new Map(); // numericId -> className
+
+  if (!fs.existsSync(csvPath)) {
+    console.warn(`  Warning: IRI mapping CSV not found at ${csvPath}`);
+    return mapping;
+  }
+
+  const content = fs.readFileSync(csvPath, 'utf-8');
+  const lines = content.split('\n');
+
+  for (let i = 1; i < lines.length; i++) { // Skip header
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const [oldIri, newIri] = line.split(',');
+    if (!oldIri || !newIri) continue;
+
+    // Extract class name from old IRI (CCO 1.x format)
+    const className = oldIri.replace('http://www.ontologyrepository.com/CommonCoreOntologies/', '');
+
+    // Extract numeric ID from new IRI (CCO 2.0 format)
+    const numericId = newIri.replace('https://www.commoncoreontologies.org/', '');
+
+    if (className && numericId && /^ont\d+$/.test(numericId)) {
+      mapping.set(numericId, className);
+    }
+  }
+
+  return mapping;
+}
+
 console.log('CCO Class Extraction Script');
 console.log('===========================\n');
+
+// Load authoritative IRI mapping from CSV
+const ontologiesDir = path.join(__dirname, '../src/ontologies');
+const iriMappingPath = path.join(ontologiesDir, 'iri-mapping-v2.0.csv');
+console.log('Loading IRI mapping CSV...');
+const authoritativeMapping = loadIriMappingCsv(iriMappingPath);
+console.log(`  Loaded ${authoritativeMapping.size} numeric ID -> class name mappings\n`);
 
 if (sourceFiles.length === 0) {
   console.error('Error: No source files found');
@@ -228,11 +276,18 @@ const namedClasses = new Set(); // Set of class names (deduped)
 
 for (const [localName, info] of allClasses) {
   if (/^ont\d+$/.test(localName)) {
-    // This is a numeric ID - use the label as the human-readable name
-    const cleanedLabel = cleanLabel(info.label, true);
-    numericIdClasses.set(localName, cleanedLabel);
-    // Also add the cleaned label to named classes for completeness
-    namedClasses.add(cleanedLabel);
+    // This is a numeric ID - prefer authoritative mapping from CSV, fallback to label
+    let className;
+    if (authoritativeMapping.has(localName)) {
+      className = authoritativeMapping.get(localName);
+    } else {
+      // Fallback: use the label (may have case issues)
+      className = cleanLabel(info.label, true);
+      console.warn(`  Warning: No authoritative mapping for ${localName}, using label: ${className}`);
+    }
+    numericIdClasses.set(localName, className);
+    // Also add the class name to named classes for completeness
+    namedClasses.add(className);
   } else {
     namedClasses.add(localName);
   }
