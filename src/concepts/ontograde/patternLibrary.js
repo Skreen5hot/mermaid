@@ -95,19 +95,17 @@ concretized, but for practical modeling purposes, every ICE should eventually be
       correct: {
         title: 'Contract with Document',
         mermaid: `graph TD
-    Contract["Contract\\nIRI: cco:InformationContentEntity"]
-    Document["Contract Document\\nIRI: cco:InformationBearingEntity"]
-
-    Contract -->|is_concretized_by| Document
-    Document -->|has_text_value| "Contract text..."`,
+ICE_0["Contract<br>IRI: cco:InformationContentEntity"]
+IBE_0["Contract Document<br>IRI: cco:InformationBearingEntity"]
+ICE_0 -->|"is concretized by<br>IRI: cco:is_concretized_by"| IBE_0
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| "Contract text..."`,
         description: 'The contract (abstract content) is concretized in a physical document.',
       },
       violations: [
         {
           title: 'Missing Concretization',
           mermaid: `graph TD
-    Contract["Contract\\nIRI: cco:InformationContentEntity"]
-    %% MISSING: is_concretized_by relationship`,
+ICE_0["Contract<br>IRI: cco:InformationContentEntity"]`,
           error: 'InformationContentEntity has no concretization',
           scoreImpact: -0.4,
         },
@@ -187,34 +185,29 @@ This is why bearer is VIOLATION (must exist) but realization is WARNING (should 
       correct: {
         title: 'Employee with Work Process',
         mermaid: `graph TD
-    Person["Person\\nIRI: cco:Person"]
-    EmployeeRole["EmployeeRole\\nIRI: cco:OccupationRole"]
-    WorkProcess["WorkProcess\\nIRI: cco:ActOfEmployment"]
-
-    Person -->|is_bearer_of| EmployeeRole
-    WorkProcess -->|realizes| EmployeeRole`,
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["EmployeeRole<br>IRI: cco:OccupationRole"]
+Process_0["WorkProcess<br>IRI: cco:ActOfEmployment"]
+Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0
+Process_0 -->|"realizes<br>IRI: cco:realizes"| Role_0`,
         description: 'A Person bears an EmployeeRole which is realized by a WorkProcess.',
       },
       violations: [
         {
           title: 'Missing Bearer',
           mermaid: `graph TD
-    EmployeeRole["EmployeeRole\\nIRI: cco:OccupationRole"]
-    WorkProcess["WorkProcess\\nIRI: cco:ActOfEmployment"]
-
-    WorkProcess -->|realizes| EmployeeRole
-    %% MISSING: Person -->|is_bearer_of| EmployeeRole`,
+Role_0["EmployeeRole<br>IRI: cco:OccupationRole"]
+Process_0["WorkProcess<br>IRI: cco:ActOfEmployment"]
+Process_0 -->|"realizes<br>IRI: cco:realizes"| Role_0`,
           error: 'Role has no bearer - ontologically invalid',
           scoreImpact: -0.8,
         },
         {
           title: 'Missing Realization (Warning)',
           mermaid: `graph TD
-    Person["Person\\nIRI: cco:Person"]
-    EmployeeRole["EmployeeRole\\nIRI: cco:OccupationRole"]
-
-    Person -->|is_bearer_of| EmployeeRole
-    %% NOTE: No realization - this is a WARNING, not an error`,
+Person_0["Person<br>IRI: cco:Person"]
+Role_0["EmployeeRole<br>IRI: cco:OccupationRole"]
+Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0`,
           error: 'Role not realized by any process (warning only)',
           scoreImpact: -0.4,
         },
@@ -260,18 +253,16 @@ is semantically invalid in CCO.`,
       correct: {
         title: 'Person with Name',
         mermaid: `graph TD
-    John["John Smith\\nIRI: ex:Person1"]
-    Name["'John Smith'\\nIRI: cco:DesignativeInformationContentEntity"]
-
-    Name -->|designates| John`,
+Person_0["John Smith<br>IRI: cco:Person"]
+Name_0["John Smith Name<br>IRI: cco:DesignativeInformationContentEntity"]
+Name_0 -->|"designates<br>IRI: cco:designates"| Person_0`,
         description: 'The name ICE properly designates the Person it names.',
       },
       violations: [
         {
           title: 'Orphan Name',
           mermaid: `graph TD
-    Name["'John Smith'\\nIRI: cco:DesignativeInformationContentEntity"]
-    %% MISSING: designates or is_designated_by relationship`,
+Name_0["John Smith Name<br>IRI: cco:DesignativeInformationContentEntity"]`,
           error: 'DesignativeInformationContentEntity does not designate anything',
           scoreImpact: -0.8,
         },
@@ -340,27 +331,24 @@ how to interpret it (Unit).`,
     ],
     examples: {
       correct: {
-        title: 'Weight Measurement',
+        title: 'Mass Measurement',
         mermaid: `graph TD
-    Measurement["Weight Reading\\nIRI: cco:MeasurementInformationContentEntity"]
-    Weight["Weight Quality\\nIRI: cco:Weight"]
-    Kilograms["Kilograms\\nIRI: cco:Kilogram"]
-
-    Measurement -->|has_decimal_value| 75.5
-    Measurement -->|uses_measurement_unit| Kilograms
-    Measurement -->|is_measurement_of| Weight`,
+Measurement_0["Mass Reading<br>IRI: cco:MeasurementInformationContentEntity"]
+Quality_0["Mass Quality<br>IRI: cco:Mass"]
+Unit_0["Mass Unit<br>IRI: cco:MeasurementUnitOfMass"]
+Measurement_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| "75.5"
+Measurement_0 -->|"uses measurement unit<br>IRI: cco:uses_measurement_unit"| Unit_0
+Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality_0`,
         description: 'A complete measurement with value, unit, and quality.',
       },
       violations: [
         {
           title: 'Missing Unit',
           mermaid: `graph TD
-    Measurement["Weight Reading\\nIRI: cco:MeasurementInformationContentEntity"]
-    Weight["Weight Quality\\nIRI: cco:Weight"]
-
-    Measurement -->|has_decimal_value| 75.5
-    Measurement -->|is_measurement_of| Weight
-    %% MISSING: uses_measurement_unit`,
+Measurement_0["Mass Reading<br>IRI: cco:MeasurementInformationContentEntity"]
+Quality_0["Mass Quality<br>IRI: cco:Mass"]
+Measurement_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| "75.5"
+Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality_0`,
           error: 'Measurement has no unit - value is uninterpretable',
           scoreImpact: -0.8,
         },
@@ -430,24 +418,18 @@ describe a situation that cannot exist in reality. This is why it's a VIOLATION 
       correct: {
         title: 'Meeting Duration',
         mermaid: `graph TD
-    Meeting["Team Meeting\\nIRI: cco:TemporalInterval"]
-    Start["9:00 AM\\nIRI: cco:TemporalInstant"]
-    End["10:00 AM\\nIRI: cco:TemporalInstant"]
-
-    Meeting -->|has_starting_instant| Start
-    Meeting -->|has_ending_instant| End`,
+TI_0["Team Meeting<br>IRI: cco:TemporalInterval"]
+TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-15T09:00:00"
+TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-01-15T10:00:00"`,
         description: 'A temporal interval with properly ordered start and end times.',
       },
       violations: [
         {
           title: 'Backwards Time',
           mermaid: `graph TD
-    Meeting["Team Meeting\\nIRI: cco:TemporalInterval"]
-    Start["10:00 AM\\nIRI: cco:TemporalInstant"]
-    End["9:00 AM\\nIRI: cco:TemporalInstant"]
-
-    Meeting -->|has_starting_instant| Start
-    Meeting -->|has_ending_instant| End`,
+TI_0["Team Meeting<br>IRI: cco:TemporalInterval"]
+TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-15T10:00:00"
+TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-01-15T09:00:00"`,
           error: 'Start time is after end time - logically impossible',
           scoreImpact: -0.8,
         },
@@ -511,22 +493,20 @@ This is WARNING severity because:
       correct: {
         title: 'Business Meeting',
         mermaid: `graph TD
-    Meeting["Planning Meeting\\nIRI: cco:ActOfCommunication"]
-    Manager["Manager\\nIRI: cco:Agent"]
-    Team["Team Members\\nIRI: cco:GroupOfAgents"]
-    TimeSlot["Meeting Time\\nIRI: cco:TemporalInterval"]
-
-    Meeting -->|has_agent| Manager
-    Meeting -->|has_participant| Team
-    Meeting -->|occupies_temporal_interval| TimeSlot`,
+Meeting_0["Planning Meeting<br>IRI: cco:ActOfCommunication"]
+Person_0["Manager<br>IRI: cco:Person"]
+Group_0["Team Members<br>IRI: cco:GroupOfAgents"]
+TI_0["Meeting Time<br>IRI: cco:TemporalInterval"]
+Meeting_0 -->|"has agent<br>IRI: cco:has_agent"| Person_0
+Meeting_0 -->|"has participant<br>IRI: bfo:BFO_0000057"| Group_0
+Meeting_0 -->|"occupies temporal region<br>IRI: bfo:BFO_0000199"| TI_0`,
         description: 'An Act with agent participation and temporal grounding.',
       },
       violations: [
         {
           title: 'Orphan Act',
           mermaid: `graph TD
-    Meeting["Planning Meeting\\nIRI: cco:ActOfCommunication"]
-    %% MISSING: has_agent and occupies_temporal_interval`,
+Meeting_0["Planning Meeting<br>IRI: cco:ActOfCommunication"]`,
           error: 'Act has no agent participation or temporal grounding (warnings)',
           scoreImpact: -0.4,
         },
@@ -578,10 +558,9 @@ should be a warning for completeness.`,
       correct: {
         title: 'Hammer Tool',
         mermaid: `graph TD
-    Hammer["Hammer\\nIRI: cco:Artifact"]
-    StrikingFunction["Striking Function\\nIRI: cco:ArtifactFunction"]
-
-    Hammer -->|has_function| StrikingFunction`,
+Artifact_0["Hammer<br>IRI: cco:Artifact"]
+Function_0["Striking Function<br>IRI: cco:ArtifactFunction"]
+Artifact_0 -->|"has function<br>IRI: cco:has_function"| Function_0`,
         description: 'An artifact with its designed function.',
       },
       violations: [],
@@ -610,10 +589,9 @@ inherent abilities.`,
       correct: {
         title: 'Person with Skill',
         mermaid: `graph TD
-    Person["Carpenter\\nIRI: cco:Person"]
-    Capability["Woodworking Skill\\nIRI: cco:Capability"]
-
-    Person -->|has_capability| Capability`,
+Person_0["Carpenter<br>IRI: cco:Person"]
+Capability_0["Woodworking Skill<br>IRI: cco:AgentCapability"]
+Person_0 -->|"has capability<br>IRI: cco:has_capability"| Capability_0`,
         description: 'An agent with a capability.',
       },
       violations: [],
