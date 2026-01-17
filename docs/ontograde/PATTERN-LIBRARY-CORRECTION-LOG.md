@@ -273,7 +273,24 @@ The draft patterns (`artifact-function` and `agent-capability`) also need updati
    - Changed `has_decimal_value` to `has_measurement_value`
    - Added explicit BFO IRIs for `has_participant` and `occupies_temporal_region`
 4. **Updated violation examples** to also use the new format
-5. **All tests pass** (23/23 test files)
+5. **Fixed Mermaid syntax compatibility** (Round 2):
+   - Removed literal edge targets (e.g., `-->| "predicate" | "literal value"`) which Mermaid.js doesn't support
+   - Changed Temporal Pattern to use TemporalInstant nodes instead of literal datetime strings
+   - Removed `has_text_value` and `has_measurement_value` literal edges from examples
+   - Added notes explaining that literal values are validated but not visualized in Mermaid
+6. **All tests pass** (23/23 test files)
+
+## Mermaid Syntax Limitation
+
+**Important:** Standard Mermaid.js does NOT support quoted strings as edge targets. The syntax:
+```
+Node_0 -->|"predicate"| "literal value"
+```
+Will fail with a parse error. Only node IDs are valid edge targets in Mermaid.
+
+OntoGrade's internal mermaidLifter has a custom parser that supports this syntax for validation purposes, but the diagrams won't render in standard Mermaid renderers.
+
+**Workaround:** For pattern examples, we use object-to-object relationships and note that literal datatype properties are validated separately.
 
 ## Patterns Updated
 

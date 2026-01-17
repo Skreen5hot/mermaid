@@ -97,9 +97,8 @@ concretized, but for practical modeling purposes, every ICE should eventually be
         mermaid: `graph TD
 ICE_0["Contract<br>IRI: cco:InformationContentEntity"]
 IBE_0["Contract Document<br>IRI: cco:InformationBearingEntity"]
-ICE_0 -->|"is concretized by<br>IRI: cco:is_concretized_by"| IBE_0
-IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| "Contract text..."`,
-        description: 'The contract (abstract content) is concretized in a physical document.',
+ICE_0 -->|"is concretized by<br>IRI: cco:is_concretized_by"| IBE_0`,
+        description: 'The contract (abstract content) is concretized in a physical document. Note: has_text_value literal edges are validated but not shown in Mermaid diagrams.',
       },
       violations: [
         {
@@ -336,10 +335,9 @@ how to interpret it (Unit).`,
 Measurement_0["Mass Reading<br>IRI: cco:MeasurementInformationContentEntity"]
 Quality_0["Mass Quality<br>IRI: cco:Mass"]
 Unit_0["Mass Unit<br>IRI: cco:MeasurementUnitOfMass"]
-Measurement_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| "75.5"
 Measurement_0 -->|"uses measurement unit<br>IRI: cco:uses_measurement_unit"| Unit_0
 Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality_0`,
-        description: 'A complete measurement with value, unit, and quality.',
+        description: 'A complete measurement with unit and quality. Note: has_measurement_value literal is validated but not shown in Mermaid diagrams.',
       },
       violations: [
         {
@@ -347,7 +345,6 @@ Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality
           mermaid: `graph TD
 Measurement_0["Mass Reading<br>IRI: cco:MeasurementInformationContentEntity"]
 Quality_0["Mass Quality<br>IRI: cco:Mass"]
-Measurement_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| "75.5"
 Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality_0`,
           error: 'Measurement has no unit - value is uninterpretable',
           scoreImpact: -0.8,
@@ -419,17 +416,21 @@ describe a situation that cannot exist in reality. This is why it's a VIOLATION 
         title: 'Meeting Duration',
         mermaid: `graph TD
 TI_0["Team Meeting<br>IRI: cco:TemporalInterval"]
-TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-15T09:00:00"
-TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-01-15T10:00:00"`,
-        description: 'A temporal interval with properly ordered start and end times.',
+Start_0["9:00 AM<br>IRI: cco:TemporalInstant"]
+End_0["10:00 AM<br>IRI: cco:TemporalInstant"]
+TI_0 -->|"has starting instant<br>IRI: cco:has_starting_instant"| Start_0
+TI_0 -->|"has ending instant<br>IRI: cco:has_ending_instant"| End_0`,
+        description: 'A temporal interval with properly ordered start and end instants.',
       },
       violations: [
         {
           title: 'Backwards Time',
           mermaid: `graph TD
 TI_0["Team Meeting<br>IRI: cco:TemporalInterval"]
-TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-15T10:00:00"
-TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-01-15T09:00:00"`,
+Start_0["10:00 AM<br>IRI: cco:TemporalInstant"]
+End_0["9:00 AM<br>IRI: cco:TemporalInstant"]
+TI_0 -->|"has starting instant<br>IRI: cco:has_starting_instant"| Start_0
+TI_0 -->|"has ending instant<br>IRI: cco:has_ending_instant"| End_0`,
           error: 'Start time is after end time - logically impossible',
           scoreImpact: -0.8,
         },
