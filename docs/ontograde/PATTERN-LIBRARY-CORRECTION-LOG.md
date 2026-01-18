@@ -45,19 +45,36 @@ Person_0 -->|"is bearer of<br>IRI: cco:is_bearer_of"| Role_0
 - Human-readable label before `<br>` (spaces allowed)
 - IRI uses prefix format (e.g., `cco:is_bearer_of`, `bfo:BFO_0000056`)
 
-### 3. Literal Edge Format (New)
+### 3. Literal Node Format (Current Convention - 2026-01-18)
 
-**NEW (Not in old patterns):**
+**Standard Mermaid.js does NOT support literal strings as edge targets.** Instead, we use **literal nodes** with a naming convention:
+
+**Literal Node Convention:**
 ```mermaid
-TI_0 -->|"has start time<br>IRI: cco:has_start_time"| "2026-01-01T00:00:00"
+lit_0("literal value here")
+lit_1("75.5")
+lit_2("2026-01-15T09:00:00")
 ```
 
+**Usage in Patterns:**
+```mermaid
+graph TD
+IBE_0["Contract Document<br>IRI: cco:InformationBearingEntity"]
+lit_0("Contract text content...")
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0
+```
+
+**Naming Convention:**
+- Node IDs: `lit_0`, `lit_1`, `lit_2`, etc. (sequential numbering)
+- Node shape: Parentheses `()` to distinguish from entity nodes (square brackets)
+- Node content: The literal value as a string
+
 **Notes:**
-- Literal values are quoted strings at the end
 - mermaidLifter automatically adds XSD datatypes for known predicates:
-  - `has_start_time`, `has_end_time` -> `xsd:dateTime`
-  - `has_text_value` -> `xsd:string`
-  - `has_measurement_value` -> `xsd:decimal`
+  - `has_start_time`, `has_end_time`, `has_time_value` → `xsd:dateTime`
+  - `has_text_value` → `xsd:string`
+  - `has_measurement_value` → `xsd:decimal`
+- This convention allows Mermaid.js to render the diagrams while maintaining semantic accuracy
 
 ## Patterns Requiring Updates
 
@@ -280,17 +297,44 @@ The draft patterns (`artifact-function` and `agent-capability`) also need updati
    - Added notes explaining that literal values are validated but not visualized in Mermaid
 6. **All tests pass** (23/23 test files)
 
-## Mermaid Syntax Limitation
+## Completed Actions (2026-01-18)
 
-**Important:** Standard Mermaid.js does NOT support quoted strings as edge targets. The syntax:
+**Round 3: Restored literal edges using literal node convention**
+
+7. **Added literal node convention** to properly represent datatype properties:
+   - Literal values are now represented as nodes with IDs `lit_0`, `lit_1`, etc.
+   - Literal nodes use parentheses syntax: `lit_0("literal value...")`
+   - This allows Mermaid.js to render literal edges while maintaining semantic clarity
+8. **Restored literal edges to patterns**:
+   - Information Staircase: Added `IBE_0 --> has_text_value --> lit_0("Contract text content...")`
+   - Measurement Pattern: Added `Measurement_0 --> has_measurement_value --> lit_0("75.5")`
+   - Temporal Interval: Added time value literals to TemporalInstant nodes
+9. **Updated descriptions** to reflect the complete pattern representation
+
+## Mermaid Syntax Limitation & Solution
+
+**Problem:** Standard Mermaid.js does NOT support quoted strings as edge targets. The syntax:
 ```
 Node_0 -->|"predicate"| "literal value"
 ```
 Will fail with a parse error. Only node IDs are valid edge targets in Mermaid.
 
-OntoGrade's internal mermaidLifter has a custom parser that supports this syntax for validation purposes, but the diagrams won't render in standard Mermaid renderers.
+**Solution (Implemented 2026-01-18):** We use **literal nodes** with a standardized naming convention:
+```mermaid
+graph TD
+IBE_0["Document<br>IRI: cco:InformationBearingEntity"]
+lit_0("Contract text content...")
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0
+```
 
-**Workaround:** For pattern examples, we use object-to-object relationships and note that literal datatype properties are validated separately.
+**Benefits:**
+- ✅ Renders correctly in standard Mermaid.js
+- ✅ Visually distinct from entity nodes (parentheses vs. square brackets)
+- ✅ Semantically accurate representation of datatype properties
+- ✅ Consistent numbering convention (`lit_0`, `lit_1`, etc.)
+- ✅ Works with OntoGrade's mermaidLifter validation
+
+OntoGrade's internal mermaidLifter can parse both literal nodes and (in future versions) direct literal edge targets for maximum flexibility.
 
 ## Patterns Updated
 
