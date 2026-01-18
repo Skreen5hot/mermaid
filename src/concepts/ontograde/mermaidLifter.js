@@ -125,8 +125,20 @@ export const mermaidLifter = {
       // Map to store literal node values: lit_0 -> "literal value"
       const literalNodes = new Map();
 
+      // Normalize multi-line syntax: replace actual newlines within quotes with <br>
+      // This handles both formats: multi-line with newlines AND single-line with <br>
+      const normalized = mermaidText.replace(/\["([^"]*?)"\]/gs, (match, content) => {
+        // Replace newlines with <br> within node labels
+        const normalized = content.replace(/\n/g, '<br>');
+        return `["${normalized}"]`;
+      }).replace(/\|"([^"]*?)"\|/gs, (match, content) => {
+        // Replace newlines with <br> within edge labels
+        const normalized = content.replace(/\n/g, '<br>');
+        return `|"${normalized}"|`;
+      });
+
       // Parse Mermaid syntax
-      const lines = mermaidText.split('\n').filter(l => l.trim());
+      const lines = normalized.split('\n').filter(l => l.trim());
 
       if (lines.length === 0) {
         throw new Error('No valid nodes or edges found in Mermaid diagram');

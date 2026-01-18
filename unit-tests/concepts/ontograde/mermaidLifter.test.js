@@ -559,4 +559,99 @@ End_0 -->|"has time value<br>IRI: cco:has_time_value"| lit_1`;
     );
     assert.strictEqual(startingInstantEdge.length, 1, 'Should have has_starting_instant edge');
   });
+
+  test('liftToRDF should handle multi-line node labels with actual newlines', () => {
+    const mermaid = `graph TD
+ICE_0["Contract
+IRI: cco:InformationContentEntity"]
+IBE_0["Contract Document
+IRI: cco:InformationBearingEntity"]
+ICE_0 -->|"is concretized by
+IRI: cco:is_concretized_by"| IBE_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check that both nodes were parsed
+    const iceType = store.getQuads(
+      'http://example.org/ICE_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'
+    );
+    assert.strictEqual(iceType.length, 1, 'Should parse ICE_0 with multi-line label');
+
+    const ibeType = store.getQuads(
+      'http://example.org/IBE_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingEntity'
+    );
+    assert.strictEqual(ibeType.length, 1, 'Should parse IBE_0 with multi-line label');
+
+    // Check edge was parsed
+    const edge = store.getQuads(
+      'http://example.org/ICE_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by',
+      'http://example.org/IBE_0'
+    );
+    assert.strictEqual(edge.length, 1, 'Should parse edge with multi-line label');
+  });
+
+  test('liftToRDF should handle multi-line format with literal nodes', () => {
+    const mermaid = `graph TD
+IBE_0["Contract Document
+IRI: cco:InformationBearingEntity"]
+lit_0("Contract text content...")
+IBE_0 -->|"has text value
+IRI: cco:has_text_value"| lit_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check literal edge
+    const textValueQuads = store.getQuads(
+      'http://example.org/IBE_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value',
+      null
+    );
+    assert.strictEqual(textValueQuads.length, 1, 'Should parse literal edge with multi-line label');
+    assert.strictEqual(textValueQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(textValueQuads[0].object.value, 'Contract text content...', 'Literal value should match');
+  });
+
+  test('liftToRDF should produce same result for single-line and multi-line formats', () => {
+    const multiLine = `graph TD
+ICE_0["Contract
+IRI: cco:InformationContentEntity"]
+IBE_0["Contract Document
+IRI: cco:InformationBearingEntity"]
+lit_0("Contract text...")
+ICE_0 -->|"is concretized by
+IRI: cco:is_concretized_by"| IBE_0
+IBE_0 -->|"has text value
+IRI: cco:has_text_value"| lit_0`;
+
+    const singleLine = `graph TD
+ICE_0["Contract<br>IRI: cco:InformationContentEntity"]
+IBE_0["Contract Document<br>IRI: cco:InformationBearingEntity"]
+lit_0("Contract text...")
+ICE_0 -->|"is concretized by<br>IRI: cco:is_concretized_by"| IBE_0
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0`;
+
+    const multiLineStore = mermaidLifter.helpers.liftToRDF(multiLine);
+    const singleLineStore = mermaidLifter.helpers.liftToRDF(singleLine);
+
+    // Both should produce the same number of triples
+    assert.strictEqual(multiLineStore.size, singleLineStore.size, 'Should produce same number of triples');
+
+    // Check specific triples match
+    const multiLineIceType = multiLineStore.getQuads(
+      'http://example.org/ICE_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'
+    );
+    const singleLineIceType = singleLineStore.getQuads(
+      'http://example.org/ICE_0',
+      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'
+    );
+    assert.strictEqual(multiLineIceType.length, singleLineIceType.length, 'Should produce same ICE type triple');
+  });
 });

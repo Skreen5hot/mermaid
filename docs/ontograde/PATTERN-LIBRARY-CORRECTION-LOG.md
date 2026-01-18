@@ -69,6 +69,21 @@ IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0
 - Node shape: Parentheses `()` to distinguish from entity nodes (square brackets)
 - Node content: The literal value as a string
 
+**Multi-line Support (2026-01-18):**
+Both single-line and multi-line formats are supported:
+```mermaid
+// Single-line format (using <br>)
+ICE_0["Contract<br>IRI: cco:InformationContentEntity"]
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0
+
+// Multi-line format (actual newlines) - ALSO SUPPORTED
+ICE_0["Contract
+IRI: cco:InformationContentEntity"]
+IBE_0 -->|"has text value
+IRI: cco:has_text_value"| lit_0
+```
+Both formats produce identical RDF output. The parser automatically normalizes newlines to `<br>` internally.
+
 **Notes:**
 - mermaidLifter automatically adds XSD datatypes for known predicates:
   - `has_start_time`, `has_end_time`, `has_time_value` → `xsd:dateTime`
@@ -316,7 +331,12 @@ The draft patterns (`artifact-function` and `agent-capability`) also need updati
     - When an edge points to `lit_N`, a literal triple is created instead
     - Added `has_time_value` to PREDICATE_DATATYPES mapping
     - Added 3 comprehensive unit tests (all passing)
-11. **Test coverage**: All 30 unit tests passing (27 existing + 3 new literal node tests)
+11. **Added multi-line format support**:
+    - Parser now handles both `<br>` tags and actual newlines
+    - Normalizes newlines to `<br>` internally before parsing
+    - Both formats produce identical RDF output
+    - Added 3 additional tests for multi-line format
+12. **Test coverage**: All 33 unit tests passing (27 original + 6 new tests)
 
 ## Mermaid Syntax Limitation & Solution
 
