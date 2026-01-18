@@ -447,4 +447,116 @@ TI_0 -->|"has end time<br>IRI: cco:has_end_time"| "2026-12-31T23:59:59"`;
       'Should expand obo: prefix'
     );
   });
+
+  test('liftToRDF should parse literal nodes with lit_N syntax', () => {
+    const mermaid = `graph TD
+IBE_0["Contract Document<br>IRI: cco:InformationBearingEntity"]
+lit_0("Contract text content...")
+IBE_0 -->|"has text value<br>IRI: cco:has_text_value"| lit_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check that lit_0 is NOT created as a named node
+    const lit0Node = store.getQuads('http://example.org/lit_0', null, null);
+    assert.strictEqual(lit0Node.length, 0, 'lit_0 should not exist as a named node');
+
+    // Check has_text_value literal
+    const textValueQuads = store.getQuads(
+      'http://example.org/IBE_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value',
+      null
+    );
+    assert.strictEqual(textValueQuads.length, 1, 'Should have has_text_value relationship');
+    assert.strictEqual(textValueQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(textValueQuads[0].object.value, 'Contract text content...', 'Literal value should match');
+    assert.strictEqual(
+      textValueQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#string',
+      'Should have xsd:string datatype'
+    );
+  });
+
+  test('liftToRDF should parse multiple literal nodes', () => {
+    const mermaid = `graph TD
+Measurement_0["Mass Reading<br>IRI: cco:MeasurementInformationContentEntity"]
+Quality_0["Mass Quality<br>IRI: cco:Mass"]
+Unit_0["Mass Unit<br>IRI: cco:MeasurementUnitOfMass"]
+lit_0("75.5")
+Measurement_0 -->|"has measurement value<br>IRI: cco:has_measurement_value"| lit_0
+Measurement_0 -->|"uses measurement unit<br>IRI: cco:uses_measurement_unit"| Unit_0
+Measurement_0 -->|"is a measurement of<br>IRI: cco:is_a_measurement_of"| Quality_0`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check measurement value literal
+    const measurementQuads = store.getQuads(
+      'http://example.org/Measurement_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_measurement_value',
+      null
+    );
+    assert.strictEqual(measurementQuads.length, 1, 'Should have has_measurement_value relationship');
+    assert.strictEqual(measurementQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(measurementQuads[0].object.value, '75.5', 'Literal value should match');
+    assert.strictEqual(
+      measurementQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#decimal',
+      'Should have xsd:decimal datatype'
+    );
+
+    // Check object edges still work
+    const unitEdge = store.getQuads(
+      'http://example.org/Measurement_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/uses_measurement_unit',
+      'http://example.org/Unit_0'
+    );
+    assert.strictEqual(unitEdge.length, 1, 'Should have uses_measurement_unit edge');
+  });
+
+  test('liftToRDF should parse temporal interval with literal nodes', () => {
+    const mermaid = `graph TD
+TI_0["Team Meeting<br>IRI: cco:TemporalInterval"]
+Start_0["9:00 AM<br>IRI: cco:TemporalInstant"]
+End_0["10:00 AM<br>IRI: cco:TemporalInstant"]
+lit_0("2026-01-15T09:00:00")
+lit_1("2026-01-15T10:00:00")
+TI_0 -->|"has starting instant<br>IRI: cco:has_starting_instant"| Start_0
+TI_0 -->|"has ending instant<br>IRI: cco:has_ending_instant"| End_0
+Start_0 -->|"has time value<br>IRI: cco:has_time_value"| lit_0
+End_0 -->|"has time value<br>IRI: cco:has_time_value"| lit_1`;
+
+    const store = mermaidLifter.helpers.liftToRDF(mermaid);
+
+    // Check Start_0 has time value literal
+    const startTimeQuads = store.getQuads(
+      'http://example.org/Start_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_time_value',
+      null
+    );
+    assert.strictEqual(startTimeQuads.length, 1, 'Should have has_time_value for Start_0');
+    assert.strictEqual(startTimeQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(startTimeQuads[0].object.value, '2026-01-15T09:00:00', 'Start time should match');
+    assert.strictEqual(
+      startTimeQuads[0].object.datatype.value,
+      'http://www.w3.org/2001/XMLSchema#dateTime',
+      'Should have xsd:dateTime datatype'
+    );
+
+    // Check End_0 has time value literal
+    const endTimeQuads = store.getQuads(
+      'http://example.org/End_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_time_value',
+      null
+    );
+    assert.strictEqual(endTimeQuads.length, 1, 'Should have has_time_value for End_0');
+    assert.strictEqual(endTimeQuads[0].object.termType, 'Literal', 'Object should be a Literal');
+    assert.strictEqual(endTimeQuads[0].object.value, '2026-01-15T10:00:00', 'End time should match');
+
+    // Verify object edges still work
+    const startingInstantEdge = store.getQuads(
+      'http://example.org/TI_0',
+      'http://www.ontologyrepository.com/CommonCoreOntologies/has_starting_instant',
+      'http://example.org/Start_0'
+    );
+    assert.strictEqual(startingInstantEdge.length, 1, 'Should have has_starting_instant edge');
+  });
 });

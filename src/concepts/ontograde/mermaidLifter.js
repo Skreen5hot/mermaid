@@ -48,6 +48,7 @@ const PREDICATE_DATATYPES = {
   // CCO temporal predicates
   'http://www.ontologyrepository.com/CommonCoreOntologies/has_start_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
   'http://www.ontologyrepository.com/CommonCoreOntologies/has_end_time': 'http://www.w3.org/2001/XMLSchema#dateTime',
+  'http://www.ontologyrepository.com/CommonCoreOntologies/has_time_value': 'http://www.w3.org/2001/XMLSchema#dateTime',
   'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value': 'http://www.w3.org/2001/XMLSchema#string',
   'http://www.ontologyrepository.com/CommonCoreOntologies/has_measurement_value': 'http://www.w3.org/2001/XMLSchema#decimal',
 };
@@ -121,6 +122,9 @@ export const mermaidLifter = {
     liftToRDF(mermaidText) {
       const store = new Store();
 
+      // Map to store literal node values: lit_0 -> "literal value"
+      const literalNodes = new Map();
+
       // Parse Mermaid syntax
       const lines = mermaidText.split('\n').filter(l => l.trim());
 
@@ -142,6 +146,15 @@ export const mermaidLifter = {
         // Skip subgraph declarations and end statements
         if (line.trim().startsWith('subgraph') || line.trim() === 'end') {
           continue;
+        }
+
+        // Literal node definition: lit_0("literal value")
+        // Pattern: lit_N("value") where N is a number
+        const literalNodeMatch = line.match(/(lit_\d+)\("([^"]+)"\)/);
+        if (literalNodeMatch) {
+          const [, nodeId, literalValue] = literalNodeMatch;
+          literalNodes.set(nodeId, literalValue);
+          continue; // Don't add to RDF as a node - will be added when edge is parsed
         }
 
         // Node definition: Person_0["Person<br>IRI: cco:Person"]
@@ -205,11 +218,31 @@ export const mermaidLifter = {
           // Extract IRI from predicate label
           const predicateIri = mermaidLifter.helpers.extractPredicateIRI(predicateLabel);
 
-          store.addQuad(
-            namedNode(`http://example.org/${subject}`),
-            namedNode(predicateIri),
-            namedNode(`http://example.org/${object}`)
-          );
+          // Check if target is a literal node (lit_N)
+          if (literalNodes.has(object)) {
+            const literalValue = literalNodes.get(object);
+
+            // Get datatype for this predicate (if known)
+            const datatype = PREDICATE_DATATYPES[predicateIri];
+
+            // Create literal with or without datatype
+            const literalNode = datatype
+              ? literal(literalValue, namedNode(datatype))
+              : literal(literalValue);
+
+            store.addQuad(
+              namedNode(`http://example.org/${subject}`),
+              namedNode(predicateIri),
+              literalNode
+            );
+          } else {
+            // Regular object node
+            store.addQuad(
+              namedNode(`http://example.org/${subject}`),
+              namedNode(predicateIri),
+              namedNode(`http://example.org/${object}`)
+            );
+          }
         }
       }
 

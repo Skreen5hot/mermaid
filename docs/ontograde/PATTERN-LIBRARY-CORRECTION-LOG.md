@@ -310,6 +310,13 @@ The draft patterns (`artifact-function` and `agent-capability`) also need updati
    - Measurement Pattern: Added `Measurement_0 --> has_measurement_value --> lit_0("75.5")`
    - Temporal Interval: Added time value literals to TemporalInstant nodes
 9. **Updated descriptions** to reflect the complete pattern representation
+10. **Implemented mermaidLifter support for literal nodes**:
+    - Added parsing for `lit_N("value")` syntax
+    - Literal nodes are stored in a Map and not created as RDF named nodes
+    - When an edge points to `lit_N`, a literal triple is created instead
+    - Added `has_time_value` to PREDICATE_DATATYPES mapping
+    - Added 3 comprehensive unit tests (all passing)
+11. **Test coverage**: All 30 unit tests passing (27 existing + 3 new literal node tests)
 
 ## Mermaid Syntax Limitation & Solution
 
