@@ -29,14 +29,14 @@ describe('shaclValidator', () => {
     it('should pass for valid staircase: ICE → is_concretized_by → IBE → has_text_value → Literal', () => {
       const graph = createTestGraph([
         // ICE entity
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
 
         // is_concretized_by relationship
         ['http://example.org/Name_ICE', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by', 'http://example.org/Name_IBE'],
 
         // IBE entity
-        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonNameRecord'],
+        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingArtifact'],
 
         // has_text_value relationship
         ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value', 'John Doe'],
@@ -50,8 +50,8 @@ describe('shaclValidator', () => {
     it('should warn when ICE missing is_concretized_by', () => {
       const graph = createTestGraph([
         // ICE entity without is_concretized_by
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
       ]);
 
       const result = shaclValidator.helpers.checkInformationStaircase(graph);
@@ -66,14 +66,14 @@ describe('shaclValidator', () => {
     it('should warn when IBE missing has_text_value', () => {
       const graph = createTestGraph([
         // ICE entity
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
 
         // is_concretized_by relationship
         ['http://example.org/Name_ICE', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by', 'http://example.org/Name_IBE'],
 
         // IBE entity WITHOUT has_text_value
-        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonNameRecord'],
+        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingArtifact'],
       ]);
 
       const result = shaclValidator.helpers.checkInformationStaircase(graph);
@@ -86,10 +86,10 @@ describe('shaclValidator', () => {
     it('should handle multiple ICE entities', () => {
       const graph = createTestGraph([
         // First ICE - valid
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
         ['http://example.org/Name_ICE', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by', 'http://example.org/Name_IBE'],
-        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonNameRecord'],
+        ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingArtifact'],
         ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/has_text_value', 'John Doe'],
 
         // Second ICE - invalid (missing is_concretized_by)
@@ -233,9 +233,8 @@ describe('shaclValidator', () => {
     it('should pass for valid CCO patterns (no violations)', () => {
       const graph = createTestGraph([
         // Valid Information Staircase
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeInformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeInformationContentEntity'],
         ['http://example.org/Name_ICE', 'http://www.ontologyrepository.com/CommonCoreOntologies/is_concretized_by', 'http://example.org/Name_IBE'],
         ['http://example.org/Name_IBE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationBearingEntity'],
         ['http://example.org/Name_IBE', 'http://www.ontologyrepository.com/CommonCoreOntologies/concretizes', 'http://example.org/Name_ICE'],
@@ -650,8 +649,8 @@ describe('shaclValidator', () => {
     it('should warn when is_concretized_by has wrong range type', () => {
       const graph = createTestGraph([
         // ICE entity
-        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/PersonName'],
-        ['http://www.ontologyrepository.com/CommonCoreOntologies/PersonName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
+        ['http://example.org/Name_ICE', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName'],
+        ['http://www.ontologyrepository.com/CommonCoreOntologies/DesignativeName', 'http://www.w3.org/2000/01/rdf-schema#subClassOf', 'http://www.ontologyrepository.com/CommonCoreOntologies/InformationContentEntity'],
         // Person entity (NOT an IBE)
         ['http://example.org/Person_0', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.ontologyrepository.com/CommonCoreOntologies/Person'],
         // INCORRECT: ICE is_concretized_by Person (should be IBE)
