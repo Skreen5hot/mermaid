@@ -93,8 +93,28 @@ function _loadDiagrams({ projectId }) {
 function _setDiagrams({ diagrams, project }) {
     state.diagrams = diagrams;
 
-    // If we've loaded an empty list of diagrams for the default project, create the default diagram.
-    // This ensures the default diagram is present even on subsequent loads, not just the very first one.
+    // Project-switch coherence: if the previously-current diagram belongs to
+    // a DIFFERENT project than the one we just loaded, the user has navigated
+    // away from it. Save it (so any unsaved edits don't vanish), then clear
+    // it so we don't accidentally route subsequent typing or save-on-switch
+    // calls to the wrong project's diagram. The auto-select block below then
+    // picks an appropriate diagram from the new project.
+    if (state.currentDiagram
+        && state.currentDiagram.projectId !== undefined
+        && project?.id != null
+        && state.currentDiagram.projectId !== project.id) {
+        _cancelAutoSave();
+        if (state.currentDiagram.isDirty && state.currentDiagram.id != null) {
+            bus.notify('do:saveDiagram', {
+                diagramData: state.currentDiagram,
+                becomeCurrent: false,
+            });
+        }
+        state.currentDiagram = null;
+    }
+
+    // Default-Project bootstrap: if a fresh Default Project has no diagrams,
+    // create the seeded one. (Non-default projects manage their own seed.)
     if (diagrams.length === 0 && state.currentDiagram === null) {
         if (project?.name === 'Default Project') {
             const defaultContent = `graph TD\n    A[Start] --> B{Is it?};\n    B -- Yes --> C[OK];\n    C --> D[End];\n    B -- No --> E[Find out];\n    E --> B;`;
@@ -105,12 +125,17 @@ function _setDiagrams({ diagrams, project }) {
 
     bus.notify('diagramsUpdated', { diagrams: state.diagrams, currentDiagramId: state.currentDiagram?.id });
 
-    // If the list of diagrams for the current project is empty,
-    // and there isn't already a current diagram (e.g. an unsaved one),
-    // OR if a list of diagrams has loaded but none are selected,
-    // we must explicitly notify that no diagram content is active.
+    // Auto-select: if we entered a project with diagrams but nothing is
+    // currently selected, pick the first one. Keeps state.currentDiagram in
+    // sync with what the user is looking at, so typing always lands in the
+    // right file and save-on-switch can route correctly.
+    if (state.currentDiagram === null && diagrams.length > 0) {
+        _setCurrentDiagram({ diagramId: diagrams[0].id });
+        return;
+    }
+
+    // Empty project (no diagrams, not Default Project) — clear the editor.
     if (state.currentDiagram === null) {
-        // This is the crucial event that was missing on initial load.
         bus.notify('diagramContentLoaded', { diagram: null });
     }
 }

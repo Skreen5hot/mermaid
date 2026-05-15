@@ -252,6 +252,61 @@ describe('Diagram Concept', () => {
       assert.strictEqual(load.payload.diagramId, 'd2');
     });
 
+    it('setDiagrams for a different project saves the dirty current and auto-selects the new first', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      const received = [];
+      diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+      // Setup: current diagram belongs to project A, dirty with new edits.
+      diagramConcept.listen('handleDiagramLoaded', { id: 'A:x', name: 'x', projectId: 'A', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'unsaved A edits' });
+      assert.strictEqual(diagramConcept.getState().currentDiagram.isDirty, true);
+
+      // Project switch arrives: setDiagrams for project B with two diagrams.
+      diagramConcept.listen('setDiagrams', {
+        diagrams: [
+          { id: 'B:1', name: 'first', projectId: 'B', content: 'b1' },
+          { id: 'B:2', name: 'second', projectId: 'B', content: 'b2' },
+        ],
+        project: { id: 'B', name: 'Project B', mode: 'idb' },
+      });
+
+      // Dirty A should be saved with becomeCurrent:false (background save).
+      const save = received.find((r) => r.event === 'do:saveDiagram');
+      assert.ok(save, 'project switch must save the dirty current first');
+      assert.strictEqual(save.payload.diagramData.id, 'A:x');
+      assert.strictEqual(save.payload.diagramData.content, 'unsaved A edits');
+      assert.strictEqual(save.payload.becomeCurrent, false);
+
+      // Auto-select: first diagram of B should be loaded.
+      const load = received.find((r) => r.event === 'do:loadDiagram');
+      assert.ok(load, 'auto-select fires for the first diagram of the new project');
+      assert.strictEqual(load.payload.diagramId, 'B:1');
+    });
+
+    it('setDiagrams for the same project does NOT clobber the current diagram', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('handleDiagramLoaded', { id: 'A:x', name: 'x', projectId: 'A', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'still editing' });
+
+      const received = [];
+      diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+      // Re-list diagrams for the SAME project A (e.g. after a save).
+      diagramConcept.listen('setDiagrams', {
+        diagrams: [{ id: 'A:x', name: 'x', projectId: 'A', content: 'old' }],
+        project: { id: 'A', name: 'Project A', mode: 'idb' },
+      });
+
+      // No save, no load, no clear — the user is still on their current diagram.
+      assert.ok(!received.find((r) => r.event === 'do:saveDiagram'));
+      assert.ok(!received.find((r) => r.event === 'do:loadDiagram'));
+      assert.strictEqual(diagramConcept.getState().currentDiagram.id, 'A:x');
+      assert.strictEqual(diagramConcept.getState().currentDiagram.content, 'still editing');
+    });
+
     it('setCurrentDiagram with a clean current does NOT trigger a save', () => {
       fakeLocalStorage();
       diagramConcept.reset();
