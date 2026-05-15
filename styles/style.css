@@ -561,11 +561,20 @@ textarea {
   text-align: center;
 }
 
-/* --- Theme Switch --- */
-.theme-switch-container {
+/* --- Autosave toggle (reuses the .theme-switch slider geometry) --- */
+.autosave-container {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
 }
+
+.autosave-label {
+  color: var(--header-text);
+  font-weight: normal;
+}
+
+/* --- Toggle slider --- */
 
 .theme-switch {
   position: relative;

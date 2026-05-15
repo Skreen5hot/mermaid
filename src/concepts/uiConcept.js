@@ -20,7 +20,7 @@ let elements = {};
 function _cacheElements() {
     const ids = [
         'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
-        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'theme-toggle',
+        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'autosave-toggle',
         'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
         'delete-btn', 'rename-btn', 'fullscreen-btn', 'new-modal', 'new-name', 'new-cancel-btn',
         'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
@@ -404,6 +404,12 @@ function _hideReconnectBanner() {
     if (banner) banner.classList.remove('visible');
 }
 
+// --- Autosave toggle ---
+function _setAutoSaveToggle({ enabled } = {}) {
+    const t = elements['autosave-toggle'];
+    if (t) t.checked = !!enabled;
+}
+
 function _attachEventListeners() {
     elements['project-selector']?.addEventListener('change', (e) => bus.notify('ui:projectSelected', { projectId: e.target.value }));
     elements['new-project-btn']?.addEventListener('click', () => _showNewProjectModal());
@@ -449,6 +455,11 @@ function _attachEventListeners() {
 
     // --- Reconnect banner ---
     elements['reconnect-btn']?.addEventListener('click', () => bus.notify('ui:reconnectClicked'));
+
+    // --- Autosave toggle (header) ---
+    elements['autosave-toggle']?.addEventListener('change', (e) => {
+        bus.notify('ui:autoSaveToggled', { enabled: !!e.target.checked });
+    });
 
     // --- Export project modal (Phase 2) ---
     elements['export-project-btn']?.addEventListener('click', () => bus.notify('ui:exportProjectClicked'));
@@ -609,6 +620,8 @@ const actions = {
     'showExportProjectModal': _showExportProjectModal,
     'hideExportProjectModal': _hideExportProjectModal,
     'setExportButtonVisible': _setExportButtonVisible,
+    // Autosave.
+    'setAutoSaveToggle': _setAutoSaveToggle,
 };
 
 /**
@@ -630,4 +643,11 @@ export const uiConcept = {
         }
     },
     setMermaid: _setMermaid,
+    // Synchronous getter: returns the editor's current value or null. Used by
+    // the sync layer to flush the editor's in-flight typing into state before
+    // switching diagrams (the 300ms input debounce can otherwise lose the
+    // last few keystrokes).
+    getEditorContent() {
+        return elements['code-editor']?.value ?? null;
+    },
 };

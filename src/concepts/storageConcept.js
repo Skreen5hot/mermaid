@@ -109,7 +109,7 @@ async function _deleteProject({ projectId }) {
   }
 }
 
-async function _saveDiagram({ diagramData }) {
+async function _saveDiagram({ diagramData, becomeCurrent = false }) {
   try {
     const project = parseStorageId(diagramData.projectId);
     if (project.mode === 'fsa') {
@@ -137,6 +137,7 @@ async function _saveDiagram({ diagramData }) {
         projectId: diagramData.projectId,
         content: diagramData.content,
         dateModified: new Date().toISOString(),
+        becomeCurrent,
       });
     } else {
       const idbPayload = {
@@ -155,6 +156,7 @@ async function _saveDiagram({ diagramData }) {
         projectId: diagramData.projectId,
         content: saved.content,
         dateModified: saved.dateModified,
+        becomeCurrent,
       });
     }
   } catch (e) {

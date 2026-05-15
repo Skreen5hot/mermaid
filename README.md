@@ -46,6 +46,7 @@ Because this application uses modern JavaScript Modules (`import`/`export`), it 
 *   **Individual File Management**:
     *   Create, save, and delete individual diagrams.
     *   Export a single diagram as a `.mmd` file.
+*   **Autosave**: a toggle in the header. When on, saved diagrams autosave 5 seconds after you stop typing. Your choice persists across sessions. Unsaved diagrams (without a name yet) still need a one-time manual Save.
 
 ### Storage modes — which to pick
 

@@ -101,6 +101,19 @@ diagramConcept.subscribe((event, payload) => {
             uiConcept.listen('renderMermaidDiagram', { content: currentDiagram.content });
         }
     }
+    if (event === 'diagramAfterSave') {
+        // Save of the currently-open diagram. Don't re-render the editor or
+        // mermaid view (the user may still be typing); just refresh the
+        // button state (the diagram now has an id, so Save/Delete/Rename
+        // should enable) and the file-info pane.
+        const projectState = projectConcept.getState();
+        const currentProject = projectState.projects.find((p) => p.id === projectState.currentProjectId);
+        uiConcept.listen('renderFileInfo', {
+            projectName: currentProject?.name,
+            diagramName: payload.diagram?.name || '',
+        });
+        uiConcept.listen('updateButtonStates', { currentDiagram: payload.diagram });
+    }
     if (event === 'diagramContentLoaded') {
         const projectState = projectConcept.getState();
         const currentProject = projectState.projects.find(p => p.id === projectState.currentProjectId);
@@ -127,6 +140,17 @@ uiConcept.subscribe((event, payload) => {
         projectConcept.listen('setCurrentProject', payload);
     }
     if (event === 'ui:diagramSelected') {
+        // Flush the editor's current value into state BEFORE the switch.
+        // The editor-input → state update is debounced at 300ms, so a fast
+        // click could otherwise lose the last few keystrokes (which is
+        // exactly when save-on-switch matters most).
+        const { currentDiagram } = diagramConcept.getState();
+        if (currentDiagram) {
+            const live = uiConcept.getEditorContent();
+            if (live !== null && live !== currentDiagram.content) {
+                diagramConcept.listen('updateCurrentDiagramContent', { content: live });
+            }
+        }
         diagramConcept.listen('setCurrentDiagram', payload);
     }
     if (event === 'ui:newProjectClicked') {
@@ -168,6 +192,9 @@ uiConcept.subscribe((event, payload) => {
         } else {
             projectConcept.listen('createProject', { name, mode });
         }
+    }
+    if (event === 'ui:autoSaveToggled') {
+        diagramConcept.listen('setAutoSave', { enabled: !!payload?.enabled });
     }
     if (event === 'ui:reconnectClicked') {
         Storage.ensurePermission()
@@ -441,6 +468,11 @@ function updateReconnectBannerState() {
  */
 export function initializeApp() {
     uiConcept.listen('initialize'); // Set up the initial UI state (like theme)
+
+    // Sync the autosave checkbox to whatever was persisted in localStorage.
+    // diagramConcept reads localStorage at module load, so getState() already
+    // reflects the user's last choice; we just need to mirror it to the DOM.
+    uiConcept.listen('setAutoSaveToggle', { enabled: diagramConcept.getState().autoSaveEnabled });
 
     // Reconnect-banner reflects Storage permission state. Re-evaluate on
     // every permissionchange and on project-list updates.

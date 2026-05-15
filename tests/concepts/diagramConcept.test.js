@@ -50,11 +50,16 @@ describe('Diagram Concept', () => {
     diagramConcept.listen('handleDiagramLoaded', diagram);
 
     const state = diagramConcept.getState();
-    assert.strictEqual(state.currentDiagram, diagram, 'State should be updated with the loaded diagram');
+    // currentDiagram is now augmented with isDirty: false; compare fields.
+    assert.strictEqual(state.currentDiagram.id, 'diag-123');
+    assert.strictEqual(state.currentDiagram.name, 'Loaded Diagram');
+    assert.strictEqual(state.currentDiagram.content, 'graph TD');
+    assert.strictEqual(state.currentDiagram.isDirty, false, 'fresh load is not dirty');
 
     const notification = received.find(r => r.event === 'diagramContentLoaded');
     assert.ok(notification, 'Should have emitted a diagramContentLoaded event');
-    assert.strictEqual(notification.payload.diagram, diagram, 'Payload should be the loaded diagram');
+    assert.strictEqual(notification.payload.diagram.id, 'diag-123');
+    assert.strictEqual(notification.payload.diagram.content, 'graph TD');
   });
 
   it("listen('updateCurrentDiagramContent') should update content on the currentDiagram state", () => {
@@ -75,15 +80,190 @@ describe('Diagram Concept', () => {
     const received = [];
     diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
 
-    // Set an existing diagram (it has an ID)
     const existingDiagram = { id: 'diag-456', name: 'Existing', content: 'A-->B' };
     diagramConcept.listen('handleDiagramLoaded', existingDiagram);
 
-    // Now trigger the save
     diagramConcept.listen('saveCurrentDiagram');
 
     const notification = received.find(r => r.event === 'do:saveDiagram');
     assert.ok(notification, "Should have emitted a 'do:saveDiagram' event");
-    assert.strictEqual(notification.payload.diagramData, existingDiagram, 'Payload should be the current diagram data');
+    assert.strictEqual(notification.payload.diagramData.id, 'diag-456');
+    assert.strictEqual(notification.payload.diagramData.name, 'Existing');
+    assert.strictEqual(notification.payload.diagramData.content, 'A-->B');
+  });
+
+  // --- Autosave tests ---
+
+  describe('Autosave', () => {
+    function fakeLocalStorage() {
+      const store = new Map();
+      global.localStorage = {
+        getItem: (k) => (store.has(k) ? store.get(k) : null),
+        setItem: (k, v) => { store.set(k, String(v)); },
+        removeItem: (k) => { store.delete(k); },
+      };
+      return store;
+    }
+
+    it('setAutoSave persists the choice to localStorage and updates state', () => {
+      const store = fakeLocalStorage();
+      diagramConcept.reset();
+
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      assert.strictEqual(diagramConcept.getState().autoSaveEnabled, true);
+      assert.strictEqual(store.get('mermaidide.autoSave'), '1');
+
+      diagramConcept.listen('setAutoSave', { enabled: false });
+      assert.strictEqual(diagramConcept.getState().autoSaveEnabled, false);
+      assert.strictEqual(store.get('mermaidide.autoSave'), '0');
+    });
+
+    it('editing a saved diagram with autosave enabled schedules a timer', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), false, 'no timer before edit');
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'new' });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), true, 'timer scheduled after edit');
+      assert.strictEqual(diagramConcept.getState().currentDiagram.isDirty, true);
+    });
+
+    it('autosave timer fires do:saveDiagram', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      const received = [];
+      diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'new' });
+
+      diagramConcept._test.fireAutoSaveTimerNow();
+
+      const save = received.find((r) => r.event === 'do:saveDiagram');
+      assert.ok(save, 'autosave should emit do:saveDiagram');
+      assert.strictEqual(save.payload.diagramData.content, 'new');
+    });
+
+    it('disabling autosave cancels a pending timer', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'new' });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), true);
+
+      diagramConcept.listen('setAutoSave', { enabled: false });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), false);
+    });
+
+    it('unsaved diagram (id=null) does NOT schedule autosave on edit', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('initializeUnsavedDiagram', { content: 'scratch' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'more scratch' });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), false);
+    });
+
+    it('switching diagrams (handleDiagramLoaded) cancels a pending timer', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'new' });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), true);
+
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd2', name: 'b', content: 'other' });
+      assert.strictEqual(diagramConcept._test.isAutoSaveTimerPending(), false);
+      assert.strictEqual(diagramConcept.getState().currentDiagram.isDirty, false);
+    });
+
+    it('handleDiagramSaved of the current diagram clears isDirty and preserves in-flight typing', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('setAutoSave', { enabled: true });
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+
+      // Simulate: user types "new" (state.content becomes "new"). Autosave
+      // fires (sends diagramData with "new"). Meanwhile the user keeps typing
+      // — "newer". When handleDiagramSaved arrives, the user's "newer" is
+      // already in memory and must not be overwritten.
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'new' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'newer' });
+      diagramConcept.listen('handleDiagramSaved', { id: 'd1', name: 'a', content: 'new', dateModified: 't' });
+
+      const state = diagramConcept.getState();
+      assert.strictEqual(state.currentDiagram.content, 'newer', 'in-flight typing preserved');
+      assert.strictEqual(state.currentDiagram.isDirty, true, 'still dirty because content differs from saved');
+    });
+
+    it('handleDiagramSaved of a brand-new diagram with becomeCurrent:true replaces current', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      // New-diagram-creation flow tags the save with becomeCurrent:true.
+      diagramConcept.listen('handleDiagramSaved', { id: 'd2', name: 'b', content: 'fresh', dateModified: 't', becomeCurrent: true });
+
+      const state = diagramConcept.getState();
+      assert.strictEqual(state.currentDiagram.id, 'd2', 'new diagram becomes current');
+      assert.strictEqual(state.currentDiagram.content, 'fresh');
+      assert.strictEqual(state.currentDiagram.isDirty, false);
+    });
+
+    it('handleDiagramSaved of a different diagram WITHOUT becomeCurrent leaves current alone', () => {
+      // This is the save-on-switch race: user clicked away while the save was
+      // in flight. The new selection must not be clobbered by the late save.
+      fakeLocalStorage();
+      diagramConcept.reset();
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd2', name: 'new', content: 'newContent' });
+
+      // Simulate a late save of the previously-open diagram.
+      diagramConcept.listen('handleDiagramSaved', { id: 'd1', name: 'old', content: 'oldEdits', dateModified: 't', becomeCurrent: false });
+
+      const state = diagramConcept.getState();
+      assert.strictEqual(state.currentDiagram.id, 'd2', 'current selection preserved');
+      assert.strictEqual(state.currentDiagram.content, 'newContent');
+    });
+
+    it('setCurrentDiagram with a dirty current fires do:saveDiagram (becomeCurrent:false) before do:loadDiagram', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      const received = [];
+      diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      diagramConcept.listen('updateCurrentDiagramContent', { content: 'unsaved edits' });
+      assert.strictEqual(diagramConcept.getState().currentDiagram.isDirty, true);
+
+      // Pretend the user clicked another diagram in the sidebar.
+      diagramConcept.listen('setCurrentDiagram', { diagramId: 'd2' });
+
+      const save = received.find((r) => r.event === 'do:saveDiagram');
+      assert.ok(save, 'do:saveDiagram fired before switch');
+      assert.strictEqual(save.payload.diagramData.id, 'd1');
+      assert.strictEqual(save.payload.diagramData.content, 'unsaved edits');
+      assert.strictEqual(save.payload.becomeCurrent, false, 'background save must not steal selection');
+
+      const load = received.find((r) => r.event === 'do:loadDiagram');
+      assert.ok(load, 'do:loadDiagram for the new selection');
+      assert.strictEqual(load.payload.diagramId, 'd2');
+    });
+
+    it('setCurrentDiagram with a clean current does NOT trigger a save', () => {
+      fakeLocalStorage();
+      diagramConcept.reset();
+      const received = [];
+      diagramConcept.subscribe((event, payload) => received.push({ event, payload }));
+
+      diagramConcept.listen('handleDiagramLoaded', { id: 'd1', name: 'a', content: 'old' });
+      // No edits — clean.
+      diagramConcept.listen('setCurrentDiagram', { diagramId: 'd2' });
+
+      const save = received.find((r) => r.event === 'do:saveDiagram');
+      assert.ok(!save, 'no save when current is not dirty');
+    });
   });
 });
