@@ -96,14 +96,24 @@ function _initResizers() {
 }
 
 // Parses an SVG string from mermaid.render and returns the <svg> element,
-// or null if parsing failed. Replaces `container.innerHTML = svg`, which
-// is the canonical Trusted-Types-incompatible sink.
+// or null if parsing failed.
+//
+// Important: we parse as 'text/html', NOT 'image/svg+xml'. mermaid's SVG
+// output is generated for innerHTML insertion in an HTML context; it isn't
+// strict-XML valid in every case (unescaped `&` in style URLs, HTML-style
+// `<br/>` inside foreignObject labels, etc.). The XML parser rejects those;
+// the HTML parser is lenient about exactly the same things `innerHTML = svg`
+// used to swallow. Going through DOMParser instead of innerHTML keeps the
+// Trusted Types default policy clean.
 function _svgFromString(svgString) {
-    const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
-    if (doc.documentElement.tagName === 'parsererror' || doc.documentElement.namespaceURI !== 'http://www.w3.org/2000/svg') {
-        return null;
-    }
-    return doc.documentElement;
+    const doc = new DOMParser().parseFromString(svgString, 'text/html');
+    // Real browser path: doc.body contains the parsed <svg>.
+    const fromBody = doc.body && doc.body.querySelector ? doc.body.querySelector('svg') : null;
+    if (fromBody) return fromBody;
+    // Test-mock path: some mocks return { documentElement: <svg-like> } directly.
+    const root = doc.documentElement;
+    if (root && root.tagName && root.tagName.toUpperCase() === 'SVG') return root;
+    return null;
 }
 
 function _renderMermaidErrorInto(container, error) {
