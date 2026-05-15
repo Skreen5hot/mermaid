@@ -137,6 +137,16 @@ diagramConcept.subscribe((event, payload) => {
 // When the UI emits an event, update the appropriate state concept.
 uiConcept.subscribe((event, payload) => {
     if (event === 'ui:projectSelected') {
+        // Flush the editor's live value into state BEFORE the project switch.
+        // The setDiagrams handler will then see the accurate `isDirty` state
+        // and persist the old diagram before clearing/auto-selecting.
+        const { currentDiagram } = diagramConcept.getState();
+        if (currentDiagram) {
+            const live = uiConcept.getEditorContent();
+            if (live !== null && live !== currentDiagram.content) {
+                diagramConcept.listen('updateCurrentDiagramContent', { content: live });
+            }
+        }
         projectConcept.listen('setCurrentProject', payload);
     }
     if (event === 'ui:diagramSelected') {
