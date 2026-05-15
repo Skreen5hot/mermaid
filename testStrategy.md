@@ -96,3 +96,68 @@ This ensures that no residual state from a previous test can cause a subsequent 
 ### The Integration Mocking Trap
 
 Mocks for unit tests can be simple, but mocks for integration tests must be much more complete. Our `synchronizations.test.js` file required a mock `IndexedDB` that supported `index()` and `put()` methods, whereas the simpler unit tests did not. This is because integration tests exercise deeper and more complex code paths. The strategy must account for evolving mocks as integration coverage grows.
+
+## 5. FSA Storage: Manual Browser Checklist
+
+The File System Access API cannot be exercised under Node — it requires a real Chromium browser with a real user gesture for the folder picker. Storage capability logic is unit-tested via the in-memory `MockDirectoryHandle` in `tests/storage/mock-fs.js`, but the *integration* with the OS, the picker, and the permission system can only be verified manually.
+
+Run this checklist after any change that touches `src/storage/storage.js`, the router's FSA paths in `src/concepts/storageConcept.js`, the UI's new-project / reconnect / foreign-folder flows, or the synchronization wiring.
+
+### Setup
+- Serve the app on `http://localhost` (e.g. `npx serve`). FSA requires a secure context; `file://` will silently fail.
+- Open in a Chromium browser (Edge, Chrome, Brave, Opera, Arc).
+- Open DevTools console — many checks below want a glance at `Storage.isReady()` etc.
+
+### First-run FSA pick
+- [ ] Click "+" in the sidebar → New Project modal opens with the IDB / FSA radio (IDB checked by default).
+- [ ] Switch to "Folder on your computer", type a name, click Create → modal closes, folder picker opens.
+- [ ] Pick a folder. Sync-Info modal pops up.
+- [ ] Click "Sounds good" → the new project appears in the selector and is selected. A default `generic.mmd` diagram is visible in the sidebar.
+- [ ] Open File Explorer / Finder: the picked folder now contains `MermaidIDE/<projectName>/generic.mmd` plus a `.app/` folder with `version` and `audit.log`.
+
+### Subsequent FSA project (no second picker)
+- [ ] Click "+" again, pick "Folder on your computer", give a different name, Create → no picker; the project is created directly inside the existing `MermaidIDE/` folder.
+
+### IDB project (regression)
+- [ ] Click "+", keep "Browser storage" selected, name + Create → project appears, no folder picker, behaves as before.
+
+### Foreign-folder flow
+- [ ] In Explorer, manually create a folder called `MermaidIDE` somewhere fresh (e.g. `~/Desktop/scratch/MermaidIDE`).
+- [ ] In a fresh browser profile (or after clearing IndexedDB), do the FSA project flow and point the picker at the *parent* of that manual folder.
+- [ ] Foreign-Folder modal appears with "Use a nested folder" / "Pick a different folder".
+- [ ] **Nest path**: click "Use a nested folder" → on disk you should see `<parent>/MermaidIDE/MermaidIDE/` (nested), and the new project lives in there.
+- [ ] **Repick path**: instead click "Pick a different folder" → the picker re-opens. Choose a different parent.
+
+### External edits round-trip
+- [ ] With an FSA project selected, open one of its `.mmd` files in another editor.
+- [ ] Change the content and save.
+- [ ] In the app, click the diagram in the sidebar (or reload the page). The new content appears.
+
+### Permission lifecycle
+- [ ] After picking a folder, reload the page. Depending on Chrome's session persistence settings, you may see the yellow Reconnect banner at the top.
+- [ ] Click Reconnect → permission prompt → grant. Banner disappears; FSA projects re-appear in the selector.
+- [ ] In Chrome's site settings, revoke folder access. Reload. Banner reappears. FSA projects do **not** appear in the selector until you reconnect.
+
+### Two-tab safety
+- [ ] Open the app in two browser tabs, both pointing at the same FSA project.
+- [ ] Make a small edit in tab A, save. Switch to tab B, make a different edit, save. Tab A's file should still be on disk; switching back and reloading shows tab B's content.
+- [ ] No torn writes — `Storage.readText` for any saved diagram returns a complete file.
+
+### Non-Chromium fallback
+- [ ] Open the app in Firefox or Safari. New-Project modal's "Folder on your computer" radio is greyed out with a tooltip "Requires Chrome, Edge, or another Chromium browser."
+- [ ] IDB-mode projects still work fully.
+
+### Audit log on disk
+- [ ] After several operations in an FSA project, open `MermaidIDE/.app/audit.log` in any text editor.
+- [ ] Each line is a JSON object with `time`, `action` (`init`, `mkdir`, `write`, `rename`, `remove`), and operation-specific detail.
+- [ ] Successful writes carry `atomic: true`; falls back to `atomic: false` only on older Chromium without `handle.move()`.
+
+### Sanity console probes
+At any point during testing:
+```js
+Storage.hasRoot()    // → true if a folder is remembered
+Storage.isReady()    // → true if permission is currently granted
+Storage.rootName()   // → basename of the picked folder
+concepts.projectConcept.getState().projects
+// → [{id: "idb:1", name: "...", mode: "idb"}, {id: "fsa:Foo", name: "Foo", mode: "fsa"}, ...]
+```

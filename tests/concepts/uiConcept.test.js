@@ -1,13 +1,13 @@
 import { uiConcept } from '../../src/concepts/uiConcept.js';
 import { describe, it } from '../test-helpers.js';
 import assert from '../../src/assert.js';
+import { installDomMock } from '../shared-test-utils/dom-mock.js';
 
 // --- Mocks for Browser Environment ---
 
 let mockElements = {};
 
 function setupMockDOM() {
-    mockElements = {};
     const ids = [
         'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
         'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'theme-toggle',
@@ -15,63 +15,9 @@ function setupMockDOM() {
         'delete-btn', 'rename-btn', 'new-modal', 'new-name', 'new-cancel-btn',
         'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
         'split-view-resizer', 'content-area',
-        'export-mmd-btn', 'render-btn'
+        'export-mmd-btn', 'render-btn',
     ];
-
-    ids.forEach(id => {
-        mockElements[id] = {
-            id: id,
-            value: '',
-            innerHTML: '',
-            textContent: '',
-            style: {},
-            classList: {
-                _classes: new Set(),
-                add: function(...classNames) { classNames.forEach(c => this._classes.add(c)) },
-                remove: function(className) { this._classes.delete(className) },
-                toggle: function(className, force) {
-                    if (force === true || (force === undefined && !this._classes.has(className))) {
-                        this._classes.add(className);
-                    } else {
-                        this._classes.delete(className);
-                    }
-                },
-                contains: function(className) { return this._classes.has(className) }
-            },
-            listeners: {},
-            addEventListener: function(event, callback) {
-                if (!this.listeners[event]) this.listeners[event] = [];
-                this.listeners[event].push(callback);
-            },
-            // Helper to simulate event trigger
-            _trigger: function(event, eventData = {}) {
-                (this.listeners[event] || []).forEach(cb => cb({ target: this, ...eventData }));
-            }
-        };
-        // Add focus mock
-        mockElements[id].focus = () => {
-            mockElements[id]._isFocused = true;
-        };
-    });
-
-    // Mock document
-    global.document = {
-        getElementById: (id) => mockElements[id] || null,
-        body: { 
-            style: {}, 
-            userSelect: '',
-            classList: {
-                _classes: new Set(),
-                toggle: function(className, force) {
-                    if (force) this._classes.add(className);
-                    else this._classes.delete(className);
-                },
-                contains: function(className) { return this._classes.has(className) }
-            }
-        },
-        addEventListener: () => {},
-        removeEventListener: () => {},
-    };
+    mockElements = installDomMock(ids);
 }
 
 const mockMermaid = {
@@ -90,14 +36,24 @@ describe('UI Concept', () => {
         uiConcept.listen('initialize');
     }
 
-    it("listen('renderProjectSelector') should update the project selector HTML", () => {
+    it("listen('renderProjectSelector') populates option elements with correct values, names, and selection", () => {
         beforeEach();
         const projects = [{ id: 1, name: 'Project A' }, { id: 2, name: 'Project B' }];
         uiConcept.listen('renderProjectSelector', { projects, currentProjectId: 2 });
 
         const selector = mockElements['project-selector'];
-        assert.ok(selector.innerHTML.includes('<option value="1" >Project A</option>'), 'Should contain Project A');
-        assert.ok(selector.innerHTML.includes('<option value="2" selected>Project B</option>'), 'Should contain and select Project B');
+        assert.strictEqual(selector.children.length, 2, 'two option children');
+
+        const optA = selector.children[0];
+        assert.strictEqual(optA.tagName, 'OPTION');
+        assert.strictEqual(optA.value, 1);
+        assert.strictEqual(optA.textContent, 'Project A');
+        assert.strictEqual(optA.selected, false);
+
+        const optB = selector.children[1];
+        assert.strictEqual(optB.value, 2);
+        assert.strictEqual(optB.textContent, 'Project B');
+        assert.strictEqual(optB.selected, true);
     });
 
     it("listen('renderEditor') should update the editor's value", () => {

@@ -3,6 +3,8 @@ import { projectConcept } from './concepts/projectConcept.js';
 import { diagramConcept } from './concepts/diagramConcept.js';
 import { uiConcept } from './concepts/uiConcept.js';
 import { tracer } from './utils/tracer.js';
+import { Storage } from './storage/storage.js';
+import { appConfirm, appPrompt, appToast } from './components/dialogs.js';
 
 // --- Synchronization Rules ---
 
@@ -128,21 +130,163 @@ uiConcept.subscribe((event, payload) => {
         diagramConcept.listen('setCurrentDiagram', payload);
     }
     if (event === 'ui:newProjectClicked') {
-        projectConcept.listen('createProject', payload);
+        const { name, mode } = payload || {};
+        if (mode === 'fsa') {
+            // FSA path. Three sub-cases:
+            //  - Storage already ready: create directly.
+            //  - Storage has root but permission lapsed: re-grant first.
+            //  - Storage has no root: pick a folder first.
+            if (Storage.isReady()) {
+                projectConcept.listen('createProject', { name, mode });
+            } else if (Storage.hasRoot()) {
+                // Permission lapsed. The click IS a user gesture, so ensurePermission
+                // is allowed to run; on success, create the project.
+                Storage.ensurePermission()
+                    .then(() => projectConcept.listen('createProject', { name, mode }))
+                    .catch(() => uiConcept.listen('showReconnectBanner'));
+            } else {
+                // First-ever FSA project: pick the root folder.
+                Storage.pickRoot()
+                    .then((result) => {
+                        if (result === null) {
+                            uiConcept.listen('clearPendingFsa');
+                            return;
+                        }
+                        if (result === false) {
+                            uiConcept.listen('showForeignFolderModal');
+                            return;
+                        }
+                        // result === true: root adopted. Show sync info modal; project
+                        // creation happens on the modal's "Sounds good" click.
+                        uiConcept.listen('showSyncInfoModal');
+                    })
+                    .catch((err) => {
+                        console.error('pickRoot failed:', err);
+                        uiConcept.listen('clearPendingFsa');
+                    });
+            }
+        } else {
+            projectConcept.listen('createProject', { name, mode });
+        }
+    }
+    if (event === 'ui:reconnectClicked') {
+        Storage.ensurePermission()
+            .then(() => uiConcept.listen('hideReconnectBanner'))
+            .catch((err) => { console.error('ensurePermission failed:', err); });
+    }
+    if (event === 'ui:foreignFolderNest') {
+        const { name } = payload || {};
+        Storage.adoptForeignFolder(true)
+            .then(() => uiConcept.listen('showSyncInfoModal'))
+            .catch((err) => {
+                console.error('adoptForeignFolder failed:', err);
+                uiConcept.listen('clearPendingFsa');
+                appToast({ message: 'Could not adopt the folder: ' + (err?.message || err), kind: 'error', timeout: 5000 });
+            });
+    }
+    if (event === 'ui:foreignFolderRepick') {
+        Storage.cancelForeignAdoption();
+        // Re-fire the picker from the click's gesture context.
+        Storage.pickRoot()
+            .then((result) => {
+                if (result === null) { uiConcept.listen('clearPendingFsa'); return; }
+                if (result === false) { uiConcept.listen('showForeignFolderModal'); return; }
+                uiConcept.listen('showSyncInfoModal');
+            })
+            .catch((err) => {
+                console.error('pickRoot retry failed:', err);
+                uiConcept.listen('clearPendingFsa');
+            });
+    }
+    if (event === 'ui:syncInfoAcknowledged') {
+        const { name } = payload || {};
+        // If we were in the middle of an export flow (the user picked a folder
+        // because Storage wasn't ready), surface the export modal now.
+        if (_pendingExportInfo) {
+            const info = _pendingExportInfo;
+            _pendingExportInfo = null;
+            const { diagrams } = diagramConcept.getState();
+            uiConcept.listen('showExportProjectModal', {
+                sourceProjectId: info.sourceProjectId,
+                sourceName: info.sourceName,
+                diagramCount: diagrams.length,
+                defaultDestName: info.sourceName,
+            });
+        } else if (name) {
+            projectConcept.listen('createProject', { name, mode: 'fsa' });
+        }
+    }
+    if (event === 'ui:exportProjectClicked') {
+        const { projects, currentProjectId } = projectConcept.getState();
+        const source = projects.find((p) => p.id === currentProjectId);
+        if (!source || source.mode !== 'idb') return; // button is hidden in this case anyway
+
+        const showModal = () => {
+            const { diagrams } = diagramConcept.getState();
+            uiConcept.listen('showExportProjectModal', {
+                sourceProjectId: source.id,
+                sourceName: source.name,
+                diagramCount: diagrams.length,
+                defaultDestName: source.name,
+            });
+        };
+
+        if (Storage.isReady()) {
+            showModal();
+        } else if (Storage.hasRoot()) {
+            Storage.ensurePermission()
+                .then(showModal)
+                .catch(() => uiConcept.listen('showReconnectBanner'));
+        } else {
+            // No folder yet — chain through pickRoot. After the pick (and
+            // foreign-folder/sync-info handshake), syncInfoAcknowledged sees
+            // _pendingExportInfo and opens the export modal instead of
+            // creating a new FSA project.
+            _pendingExportInfo = { sourceProjectId: source.id, sourceName: source.name };
+            Storage.pickRoot()
+                .then((result) => {
+                    if (result === null) { _pendingExportInfo = null; return; }
+                    if (result === false) { uiConcept.listen('showForeignFolderModal'); return; }
+                    uiConcept.listen('showSyncInfoModal');
+                })
+                .catch(() => { _pendingExportInfo = null; });
+        }
+    }
+    if (event === 'ui:exportProjectConfirmed') {
+        const { sourceProjectId, destName } = payload || {};
+        storageConcept.listen('do:exportProject', { sourceProjectId, destName });
+    }
+    if (event === 'ui:syncInfoRepick') {
+        Storage.pickRoot()
+            .then((result) => {
+                if (result === null) { uiConcept.listen('clearPendingFsa'); return; }
+                if (result === false) { uiConcept.listen('showForeignFolderModal'); return; }
+                uiConcept.listen('showSyncInfoModal');
+            })
+            .catch((err) => {
+                console.error('pickRoot (sync-info repick) failed:', err);
+                uiConcept.listen('clearPendingFsa');
+            });
     }
     if (event === 'ui:deleteProjectClicked') {
-        const { currentProjectId, projects } = projectConcept.getState();
-        const currentProject = projects.find(p => p.id === currentProjectId);
-        if (currentProject && confirm(`Are you sure you want to delete project "${currentProject.name}"? This cannot be undone.`)) {
-            projectConcept.listen('deleteProject', { projectId: currentProjectId });
-        }
+        (async () => {
+            const { currentProjectId, projects } = projectConcept.getState();
+            const currentProject = projects.find((p) => p.id === currentProjectId);
+            if (!currentProject) return;
+            const ok = await appConfirm({
+                message: `Are you sure you want to delete project "${currentProject.name}"? This cannot be undone.`,
+                confirmLabel: 'Delete',
+                danger: true,
+            });
+            if (ok) projectConcept.listen('deleteProject', { projectId: currentProjectId });
+        })();
     }
     if (event === 'ui:createDiagramClicked') {
         const { currentProjectId } = projectConcept.getState();
         if (currentProjectId) {
             diagramConcept.listen('createDiagram', { name: payload.name, projectId: currentProjectId });
         } else {
-            alert("Please select a project first.");
+            appToast({ message: 'Please select a project first.', kind: 'error' });
         }
     }
     if (event === 'ui:editorContentChanged') {
@@ -153,19 +297,30 @@ uiConcept.subscribe((event, payload) => {
         diagramConcept.listen('saveCurrentDiagram');
     }
     if (event === 'ui:deleteDiagramClicked') {
-        const { currentDiagram } = diagramConcept.getState();
-        if (currentDiagram && confirm(`Are you sure you want to delete "${currentDiagram.name}"?`)) {
-            diagramConcept.listen('deleteDiagram', { diagramId: currentDiagram.id });
-        }
+        (async () => {
+            const { currentDiagram } = diagramConcept.getState();
+            if (!currentDiagram) return;
+            const ok = await appConfirm({
+                message: `Are you sure you want to delete "${currentDiagram.name}"?`,
+                confirmLabel: 'Delete',
+                danger: true,
+            });
+            if (ok) diagramConcept.listen('deleteDiagram', { diagramId: currentDiagram.id });
+        })();
     }
     if (event === 'ui:renameDiagramClicked') {
-        const { currentDiagram } = diagramConcept.getState();
-        if (currentDiagram) {
-            const newName = prompt("Enter new name:", currentDiagram.name);
+        (async () => {
+            const { currentDiagram } = diagramConcept.getState();
+            if (!currentDiagram) return;
+            const newName = await appPrompt({
+                label: 'Enter new name:',
+                initialValue: currentDiagram.name,
+                placeholder: 'diagram name',
+            });
             if (newName && newName.trim()) {
                 diagramConcept.listen('renameDiagram', { diagramId: currentDiagram.id, newName: newName.trim() });
             }
-        }
+        })();
     }
     if (event === 'ui:splitViewToggled') {
         uiConcept.listen('toggleSplitView');
@@ -200,7 +355,7 @@ uiConcept.subscribe((event, payload) => {
                 mimeType: 'application/ld+json'
             });
         } else {
-            alert("Please open a diagram to export.");
+            appToast({ message: 'Please open a diagram to export.', kind: 'error' });
         }
     }
     if (event === 'ui:downloadProjectClicked') {
@@ -220,7 +375,7 @@ uiConcept.subscribe((event, payload) => {
                 });
             });
         } else {
-            alert("Current project is empty or not selected.");
+            appToast({ message: 'Current project is empty or not selected.', kind: 'error' });
         }
     }
     if (event === 'ui:uploadMmdClicked') {
@@ -230,7 +385,7 @@ uiConcept.subscribe((event, payload) => {
 
         if (!currentProjectId) {
             console.warn('Upload cancelled: No project selected.');
-            alert("Please select a project before uploading diagrams.");
+            appToast({ message: 'Please select a project before uploading diagrams.', kind: 'error' });
             return;
         }
 
@@ -253,16 +408,63 @@ uiConcept.subscribe((event, payload) => {
     }
 });
 
+// Tracks an in-flight Export-to-folder flow when the user clicked "Export"
+// before Storage was ready. Set when the export click kicks off pickRoot;
+// cleared when the export modal is shown (via syncInfoAcknowledged) or when
+// the flow is abandoned.
+let _pendingExportInfo = null;
+
+function updateExportButtonVisibility() {
+    const { projects, currentProjectId } = projectConcept.getState();
+    const current = projects.find((p) => p.id === currentProjectId);
+    uiConcept.listen('setExportButtonVisible', current?.mode === 'idb');
+}
+
+function updateReconnectBannerState() {
+    // Show whenever Storage has a stored root but permission isn't granted.
+    // This covers two cases: (a) an FSA project is open and unusable, and
+    // (b) the user had FSA projects previously — those won't appear in the
+    // selector until permission is restored, so the banner is the only way
+    // back. Cheap to dismiss visually for users on IDB-only.
+    if (Storage.hasRoot() && !Storage.isReady()) {
+        Storage.detectPersistentPermissions()
+            .then((persistent) => uiConcept.listen('showReconnectBanner', { persistent }))
+            .catch(() => uiConcept.listen('showReconnectBanner'));
+    } else {
+        uiConcept.listen('hideReconnectBanner');
+    }
+}
+
 /**
  * Initializes the application by setting up the UI and starting the database connection.
  * This should be called from the main entry point of the application (e.g., index.html).
  */
 export function initializeApp() {
     uiConcept.listen('initialize'); // Set up the initial UI state (like theme)
-    storageConcept.listen('do:open'); // This will eventually trigger a chain reaction
+
+    // Reconnect-banner reflects Storage permission state. Re-evaluate on
+    // every permissionchange and on project-list updates.
+    Storage.on('permissionchange', (state) => {
+        updateReconnectBannerState();
+        // After a grant, refresh projects so FSA folders re-appear in the selector.
+        if (state === 'granted') {
+            projectConcept.listen('loadProjects');
+        }
+    });
+    projectConcept.subscribe((event) => {
+        if (event === 'projectChanged' || event === 'projectsUpdated') {
+            updateReconnectBannerState();
+            updateExportButtonVisibility();
+        }
+    });
+
+    storageConcept.listen('do:open'); // This will eventually trigger a chain reaction (incl. Storage.init).
 }
 
-// --- DEBUGGING: Expose concepts to the console ---
+// --- DEBUGGING: Expose concepts and the FSA Storage capability to the console ---
+// Storage is exposed for hand-testing during phase 1 development. The full
+// initializeApp() integration (Storage.init() on app start) lands in 1.8.
 if (typeof window !== 'undefined') {
     window.concepts = { storageConcept, projectConcept, diagramConcept, uiConcept };
+    window.Storage = Storage;
 }

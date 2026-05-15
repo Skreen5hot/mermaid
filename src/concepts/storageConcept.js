@@ -1,156 +1,347 @@
 import { createEventBus } from '../utils/eventBus.js';
+import { createIdbBackend } from '../storage/idbBackend.js';
+import { Storage } from '../storage/storage.js';
+import {
+  makeIdbProjectId,
+  makeFsaProjectId,
+  makeIdbDiagramId,
+  makeFsaDiagramId,
+  parseStorageId,
+  parseFsaDiagramKey,
+} from '../storage/projectIds.js';
+
+// Router. Translates compound project/diagram ids ("idb:N" / "fsa:Name") into
+// raw IDB integers or FSA paths, dispatches to the correct backend, then
+// emits the same external events ('projectCreated', 'diagramSaved', etc.)
+// the rest of the concepts already consume — only the id values change shape.
+//
+// External event shape:
+//   projectsListed       [{ id, name, mode }, ...]
+//   projectCreated       { id, name, mode }
+//   projectDeleted       { projectId }
+//   diagramsListed       { diagrams: [{ id, name, projectId, content? }], projectId }
+//   diagramLoaded        { id, name, projectId, content, dateModified } | null
+//   diagramSaved         { id, name, projectId, content, dateModified }
+//   diagramDeleted       { diagramId }
+//   databaseOpened       no payload
+//   error                string
 
 const bus = createEventBus();
-let _db = null;
-let _dbConnectionPromise = null;
+const idb = createIdbBackend();
 
 async function _open() {
-    if (_db) {
-        // Make this async to allow subscribers to attach before the event fires.
-        // This prevents a race condition in tests.
-        Promise.resolve().then(() => bus.notify('databaseOpened'));
+  try {
+    await idb.open();
+    bus.notify('databaseOpened');
+  } catch (e) {
+    bus.notify('error', `Error opening DB: ${e?.message || e}`);
+    return;
+  }
+  // Best-effort FSA handle restore. Permission state surfaces via Storage's
+  // own events; we don't gate IDB on it.
+  Storage.init().catch(() => {});
+}
+
+async function _listProjects() {
+  let idbList = [];
+  let fsaList = [];
+  try {
+    idbList = await idb.getAllProjects();
+  } catch (e) {
+    bus.notify('error', `Failed to list IDB projects: ${e?.message || e}`);
+  }
+  if (Storage.isReady()) {
+    try {
+      const entries = await Storage.list('');
+      fsaList = entries
+        .filter((e) => e.kind === 'directory')
+        .map((e) => ({ id: makeFsaProjectId(e.name), name: e.name, mode: 'fsa' }));
+    } catch (e) {
+      // Storage error — surface as audit/error but still emit IDB projects.
+      bus.notify('error', `Failed to list FSA projects: ${e?.message || e}`);
+    }
+  }
+  const merged = [
+    ...idbList.map((p) => ({ id: makeIdbProjectId(p.id), name: p.name, mode: 'idb' })),
+    ...fsaList,
+  ];
+  bus.notify('projectsListed', merged);
+}
+
+async function _createProject(payload = {}) {
+  const { name, mode = 'idb' } = payload;
+  if (!name || typeof name !== 'string') {
+    bus.notify('error', 'Project name is required');
+    return;
+  }
+  try {
+    if (mode === 'fsa') {
+      if (!Storage.isReady()) {
+        bus.notify('error', 'FSA storage is not ready — pick a folder first');
         return;
+      }
+      const safe = name.trim();
+      await Storage.mkdir(safe);
+      const defaultDiagramContent =
+        'graph TD\n    A[Start] --> B{Is it?};\n    B -- Yes --> C[OK];\n    C --> D[End];\n    B -- No --> E[Find out];\n    E --> B;';
+      await Storage.writeText(`${safe}/generic.mmd`, defaultDiagramContent);
+      bus.notify('projectCreated', { id: makeFsaProjectId(safe), name: safe, mode: 'fsa' });
+    } else {
+      const created = await idb.createProject({ name });
+      bus.notify('projectCreated', { id: makeIdbProjectId(created.id), name: created.name, mode: 'idb' });
     }
-    if (_dbConnectionPromise) {
-        return _dbConnectionPromise;
+  } catch (e) {
+    bus.notify('error', `Failed to create project: ${e?.message || e}`);
+  }
+}
+
+async function _deleteProject({ projectId }) {
+  try {
+    const parsed = parseStorageId(projectId);
+    if (parsed.mode === 'fsa') {
+      await Storage.remove(parsed.key, { recursive: true });
+    } else {
+      await idb.deleteProject({ projectId: parsed.key });
     }
-    _dbConnectionPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open('mermaid_viewer_db', 2);
-        request.onerror = () => {
-            bus.notify('error', "Error opening DB");
-            reject("Error opening DB");
-        };
-        request.onsuccess = (event) => {
-            _db = event.target.result;
-            bus.notify('databaseOpened');
-            _dbConnectionPromise = null; // Reset for future connections if needed
-            resolve();
-        };
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains('projects')) {
-                db.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
-            }
-            if (!db.objectStoreNames.contains('diagrams')) {
-                const diagramStore = db.createObjectStore('diagrams', { keyPath: 'id', autoIncrement: true });
-                diagramStore.createIndex('projectId', 'projectId', { unique: false });
-            }
-        };
-    });
-    return _dbConnectionPromise;
+    bus.notify('projectDeleted', { projectId });
+  } catch (e) {
+    bus.notify('error', `Failed to delete project: ${e?.message || e}`);
+  }
 }
 
-function _createProject({ name }) {
-    const transaction = _db.transaction(['projects'], 'readwrite');
-    const store = transaction.objectStore('projects');
-    const request = store.add({ name });
-    request.onsuccess = (event) => bus.notify('projectCreated', { id: event.target.result, name });
-    request.onerror = () => bus.notify('error', 'Failed to create project.');
+async function _saveDiagram({ diagramData }) {
+  try {
+    const project = parseStorageId(diagramData.projectId);
+    if (project.mode === 'fsa') {
+      const safeName = diagramData.name.trim();
+      const newPath = `${project.key}/${safeName}.mmd`;
+
+      await Storage.writeText(newPath, diagramData.content);
+
+      // If this was a rename (existing id with a different name), remove the
+      // old file. Best-effort — if it's already gone, fine.
+      if (diagramData.id) {
+        const diag = parseStorageId(diagramData.id);
+        if (diag.mode === 'fsa') {
+          const { name: oldName } = parseFsaDiagramKey(diag.key);
+          if (oldName !== safeName) {
+            const oldPath = `${project.key}/${oldName}.mmd`;
+            try { await Storage.remove(oldPath); } catch {}
+          }
+        }
+      }
+
+      bus.notify('diagramSaved', {
+        id: makeFsaDiagramId(project.key, safeName),
+        name: safeName,
+        projectId: diagramData.projectId,
+        content: diagramData.content,
+        dateModified: new Date().toISOString(),
+      });
+    } else {
+      const idbPayload = {
+        name: diagramData.name,
+        projectId: project.key,
+        content: diagramData.content,
+      };
+      if (diagramData.id) {
+        const diag = parseStorageId(diagramData.id);
+        if (diag.mode === 'idb') idbPayload.id = diag.key;
+      }
+      const saved = await idb.saveDiagram({ diagramData: idbPayload });
+      bus.notify('diagramSaved', {
+        id: makeIdbDiagramId(saved.id),
+        name: saved.name,
+        projectId: diagramData.projectId,
+        content: saved.content,
+        dateModified: saved.dateModified,
+      });
+    }
+  } catch (e) {
+    bus.notify('error', `Failed to save diagram: ${e?.message || e}`);
+  }
 }
 
-function _saveProject({ projectData }) {
-    const transaction = _db.transaction(['projects'], 'readwrite');
-    const store = transaction.objectStore('projects');
-    const request = store.put(projectData);
-    // After saving, we should re-list to update UI everywhere
-    request.onsuccess = () => _listProjects();
-    request.onerror = () => bus.notify('error', 'Failed to save project.');
+async function _loadDiagram({ diagramId }) {
+  try {
+    const diag = parseStorageId(diagramId);
+    if (diag.mode === 'fsa') {
+      const { folder, name } = parseFsaDiagramKey(diag.key);
+      const content = await Storage.readText(`${folder}/${name}.mmd`);
+      bus.notify('diagramLoaded', {
+        id: diagramId,
+        name,
+        projectId: makeFsaProjectId(folder),
+        content,
+        dateModified: null,
+      });
+    } else {
+      const result = await idb.loadDiagram({ diagramId: diag.key });
+      if (!result) {
+        bus.notify('diagramLoaded', null);
+      } else {
+        bus.notify('diagramLoaded', {
+          id: makeIdbDiagramId(result.id),
+          name: result.name,
+          projectId: makeIdbProjectId(result.projectId),
+          content: result.content,
+          dateModified: result.dateModified,
+        });
+      }
+    }
+  } catch (e) {
+    bus.notify('error', `Failed to load diagram: ${e?.message || e}`);
+  }
 }
 
-function _listProjects() {
-    const transaction = _db.transaction(['projects'], 'readonly');
-    const store = transaction.objectStore('projects');
-    const request = store.getAll();
-    request.onsuccess = () => bus.notify('projectsListed', request.result);
-    request.onerror = () => bus.notify('error', 'Failed to list projects.');
+async function _listDiagrams({ projectId }) {
+  try {
+    if (projectId == null) {
+      bus.notify('diagramsListed', { diagrams: [], projectId });
+      return;
+    }
+    const project = parseStorageId(projectId);
+    let diagrams = [];
+    if (project.mode === 'fsa') {
+      const entries = await Storage.list(project.key);
+      // Eager-load content. Thumbnails and zip download need it; lazy-load would
+      // complicate both paths for negligible savings on a typical .mmd file.
+      diagrams = await Promise.all(
+        entries
+          .filter((e) => e.kind === 'file' && e.name.endsWith('.mmd'))
+          .map(async (e) => {
+            const name = e.name.slice(0, -4);
+            let content = '';
+            try { content = await Storage.readText(`${project.key}/${e.name}`); } catch {}
+            return {
+              id: makeFsaDiagramId(project.key, name),
+              name,
+              projectId,
+              content,
+            };
+          })
+      );
+    } else {
+      const list = await idb.listDiagrams({ projectId: project.key });
+      diagrams = list.map((d) => ({
+        id: makeIdbDiagramId(d.id),
+        name: d.name,
+        projectId: makeIdbProjectId(d.projectId),
+        content: d.content,
+        dateModified: d.dateModified,
+      }));
+    }
+    bus.notify('diagramsListed', { diagrams, projectId });
+  } catch (e) {
+    bus.notify('error', `Failed to list diagrams: ${e?.message || e}`);
+  }
 }
 
-function _deleteProject({ projectId }) {
-    const transaction = _db.transaction(['projects', 'diagrams'], 'readwrite');
-    const projectStore = transaction.objectStore('projects');
-    const diagramStore = transaction.objectStore('diagrams');
-    const diagramIndex = diagramStore.index('projectId');
-
-    const diagramRequest = diagramIndex.getAllKeys(projectId);
-    diagramRequest.onsuccess = () => {
-        diagramRequest.result.forEach(diagramId => diagramStore.delete(diagramId));
-        const projectRequest = projectStore.delete(projectId);
-        projectRequest.onsuccess = () => bus.notify('projectDeleted', { projectId });
-        projectRequest.onerror = () => bus.notify('error', 'Failed to delete project.');
-    };
-    diagramRequest.onerror = () => bus.notify('error', 'Failed to find diagrams for project deletion.');
+async function _deleteDiagram({ diagramId }) {
+  try {
+    const diag = parseStorageId(diagramId);
+    if (diag.mode === 'fsa') {
+      const { folder, name } = parseFsaDiagramKey(diag.key);
+      await Storage.remove(`${folder}/${name}.mmd`);
+    } else {
+      await idb.deleteDiagram({ diagramId: diag.key });
+    }
+    bus.notify('diagramDeleted', { diagramId });
+  } catch (e) {
+    bus.notify('error', `Failed to delete diagram: ${e?.message || e}`);
+  }
 }
 
-function _saveDiagram({ diagramData }) {
-    const transaction = _db.transaction(['diagrams'], 'readwrite');
-    const store = transaction.objectStore('diagrams');
-    const diagram = { ...diagramData, dateModified: new Date().toISOString() };
-    const request = store.put(diagram);
-    request.onsuccess = (event) => bus.notify('diagramSaved', { ...diagram, id: event.target.result });
-    request.onerror = () => bus.notify('error', 'Failed to save diagram.');
+// IDB → FSA one-way export. Reads the source IDB project's diagrams, creates
+// a new <destName>/ folder in the FSA root, and writes each diagram as
+// <destName>/<diagramName>.mmd. The source IDB project is read-only here.
+// Each per-diagram write is atomic (temp+move) so a mid-export crash leaves
+// a partial folder on disk without corrupting any individual file.
+async function _exportProject({ sourceProjectId, destName }) {
+  try {
+    const parsed = parseStorageId(sourceProjectId);
+    if (parsed.mode !== 'idb') {
+      bus.notify('error', 'Only IDB projects can be exported to folder');
+      return;
+    }
+    if (!Storage.isReady()) {
+      bus.notify('error', 'FSA storage is not ready — pick a folder first');
+      return;
+    }
+    const safe = (destName || '').trim();
+    if (!safe) {
+      bus.notify('error', 'Destination name is required');
+      return;
+    }
+
+    // Collision check against existing folders in the FSA root.
+    try {
+      const entries = await Storage.list('');
+      if (entries.some((e) => e.kind === 'directory' && e.name === safe)) {
+        bus.notify('error', `A folder named "${safe}" already exists on disk`);
+        return;
+      }
+    } catch (e) {
+      bus.notify('error', `Could not check destination: ${e?.message || e}`);
+      return;
+    }
+
+    const sourceDiagrams = await idb.listDiagrams({ projectId: parsed.key });
+
+    await Storage.mkdir(safe);
+    for (const d of sourceDiagrams) {
+      await Storage.writeText(`${safe}/${d.name}.mmd`, d.content, { ifAbsent: true });
+    }
+
+    bus.notify('projectCreated', { id: makeFsaProjectId(safe), name: safe, mode: 'fsa' });
+  } catch (e) {
+    bus.notify('error', `Export failed: ${e?.message || e}`);
+  }
 }
 
-function _loadDiagram({ diagramId }) {
-    const transaction = _db.transaction(['diagrams'], 'readonly');
-    const store = transaction.objectStore('diagrams');
-    const request = store.get(diagramId);
-    request.onsuccess = () => bus.notify('diagramLoaded', request.result);
-    request.onerror = () => bus.notify('error', 'Failed to load diagram.');
-}
-
-function _listDiagrams({ projectId }) {
-    const transaction = _db.transaction(['diagrams'], 'readonly');
-    const store = transaction.objectStore('diagrams');
-    const index = store.index('projectId');
-    const request = index.getAll(projectId);
-    request.onsuccess = (e) => {
-        const diagrams = e.target.result;
-        bus.notify('diagramsListed', { diagrams, projectId });
-    };
-    request.onerror = () => bus.notify('error', 'Failed to list diagrams.');
-}
-
-function _deleteDiagram({ diagramId }) {
-    const transaction = _db.transaction(['diagrams'], 'readwrite');
-    const store = transaction.objectStore('diagrams');
-    const request = store.delete(diagramId);
-    request.onsuccess = () => bus.notify('diagramDeleted', { diagramId });
-    request.onerror = () => bus.notify('error', 'Failed to delete diagram.');
-}
-
-function _reset() {
-    _db = null;
-    _dbConnectionPromise = null;
+async function _saveProject({ projectData }) {
+  // Only IDB projects have a renameable record. FSA project rename would be
+  // a folder rename — not in this slice's scope.
+  try {
+    const parsed = parseStorageId(projectData.id);
+    if (parsed.mode !== 'idb') {
+      bus.notify('error', 'Renaming FSA projects is not supported in this version');
+      return;
+    }
+    await idb.saveProject({ projectData: { id: parsed.key, name: projectData.name } });
+    await _listProjects();
+  } catch (e) {
+    bus.notify('error', `Failed to save project: ${e?.message || e}`);
+  }
 }
 
 const actions = {
-    'do:open': _open,
-    'do:createProject': _createProject,
-    'do:saveProject': _saveProject,
-    'do:listProjects': _listProjects,
-    'do:deleteProject': _deleteProject,
-    'do:saveDiagram': _saveDiagram,
-    'do:loadDiagram': _loadDiagram,
-    'do:listDiagrams': _listDiagrams,
-    'do:deleteDiagram': _deleteDiagram,
-    'reset': _reset,
+  'do:open': _open,
+  'do:listProjects': _listProjects,
+  'do:createProject': _createProject,
+  'do:saveProject': _saveProject,
+  'do:deleteProject': _deleteProject,
+  'do:exportProject': _exportProject,
+  'do:saveDiagram': _saveDiagram,
+  'do:loadDiagram': _loadDiagram,
+  'do:listDiagrams': _listDiagrams,
+  'do:deleteDiagram': _deleteDiagram,
+  reset: () => idb.reset(),
 };
 
 export const storageConcept = {
-    subscribe: bus.subscribe,
-    notify: bus.notify,
-    reset: _reset,
-    async listen(event, payload) {
-        // For any action that is not 'do:open', ensure the db is open first.
-        if (event !== 'do:open' && !_db) {
-            await _open();
-        }
-        // It's possible for the above await to resolve but _db not be set yet due to microtask timing.
-        if (event !== 'do:open' && !_db && _dbConnectionPromise) {
-            await _dbConnectionPromise;
-        }
-        if (actions[event]) { // Now that we know _db is ready, proceed.
-            actions[event](payload);
-        }
+  subscribe: bus.subscribe,
+  notify: bus.notify,
+  reset: () => idb.reset(),
+
+  async listen(event, payload) {
+    // Lazy-open the IDB on first non-do:open action, matching prior behavior.
+    if (event !== 'do:open' && !idb.isOpen()) {
+      await idb.open();
     }
+    if (actions[event]) {
+      // Fire-and-forget. Errors surface as 'error' events via the bus.
+      actions[event](payload);
+    }
+  },
 };

@@ -35,12 +35,30 @@ Because this application uses modern JavaScript Modules (`import`/`export`), it 
 ### Features
 
 *   **Project-Based Organization**: Group your diagrams into distinct projects for better management.
+*   **Two Storage Modes**, chosen per project:
+    *   **Browser storage** (works in any browser): diagrams live in IndexedDB. Fast, no permission prompts, but can be lost if you clear site data, change browsers, or reinstall the OS.
+    *   **Folder on your computer** (Chromium browsers only): diagrams are real `.mmd` files inside a folder you pick. You can open them in other tools, back them up, and they survive a browser reset.
 *   **Side-Panel Navigation**: Quickly switch between diagrams within a project using a collapsible side menu with thumbnail previews.
 *   **Code Editor & Diagram Viewer**: A split-pane view to write Mermaid syntax and see the rendered diagram update in real-time.
 *   **Bulk Operations**:
     *   **Upload**: Add multiple `.mmd` files to a project at once.
     *   **Download**: Export an entire project as a `.zip` file containing all its diagrams.
-*   **Local Storage**: All projects and diagrams are saved securely in your browser's IndexedDB. No cloud account needed.
 *   **Individual File Management**:
     *   Create, save, and delete individual diagrams.
     *   Export a single diagram as a `.mmd` file.
+
+### Storage modes — which to pick
+
+When you create a new project, you choose where it lives. Both modes are first-class; you can have any mix of them in the same app.
+
+**Browser storage (IndexedDB)** is the default. Diagrams are stored inside your browser's IndexedDB for `localhost` (or whatever origin you serve from). Zero permission prompts, instant access, works in every modern browser.
+
+> **Trade-off:** the data is bound to *that browser* on *that machine*. Clearing site data, switching browsers, reinstalling the OS, or a profile reset can wipe it. If you want diagrams that survive any of those, use the on-disk mode.
+
+**Folder on your computer (File System Access)** requires a Chromium browser (Edge, Chrome, Brave, Opera, Arc). On your first FSA project you'll pick a folder; the app creates a `MermaidIDE/` subfolder inside, and from then on every FSA-mode project is a folder there containing `.mmd` files.
+
+> **You own these files.** Move them, back them up, edit them in VS Code, sync them via OneDrive/iCloud — they're yours. The app reads what's on disk; if you edit a `.mmd` externally and reload, the new content appears.
+>
+> **Cloud sync is supported and recommended for durability**, but optional. If you'd rather avoid sync (for perf), pick a folder outside `Documents/`.
+
+The app remembers your folder choice across sessions. After a browser update or reload, it may need to re-prompt for permission — the Reconnect banner at the top of the page handles that with one click.

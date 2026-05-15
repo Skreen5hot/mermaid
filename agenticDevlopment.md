@@ -216,5 +216,21 @@ test('taskAdded triggers progress update', () => {
 > Implement deterministic logic with **pure functions** and verify behavior through **unit tests**.
 > Your goal, as the AI assistant, is to produce code that is **legible, verifiable, modular, and safe to evolve**.
 
+---
+
+## 📁 Addendum: FSA Storage is a Capability, not a Concept
+
+The File System Access (FSA) integration follows the [PWA Local Storage Guide](docs/specifications/PWA_LOCAL_STORAGE_GUIDE.md) capability-module pattern, which sits *underneath* the Concepts layer.
+
+- **Only `src/storage/storage.js` may import the FSA API** (`window.showDirectoryPicker`, `FileSystemDirectoryHandle`, `handle.createWritable`, etc.). The directory handle never leaves that module.
+- **Concepts route through it.** `src/concepts/storageConcept.js` is the dispatcher: it parses compound project ids (`"idb:N"` / `"fsa:Name"`) and calls either `idbBackend` (in-process IDB) or `Storage` (FSA). All other concepts (`projectConcept`, `diagramConcept`, `uiConcept`) talk to it via the same event surface they used before the FSA addition — they never see a handle.
+- **UI never touches FSA.** `uiConcept.js` only shows/hides modals, attaches DOM listeners, and emits UI events. Folder picking, permission requests, and write/read of `.mmd` files happen one layer down, orchestrated by `synchronizations.js` calling `Storage.*` methods.
+
+When generating or refactoring FSA-related code:
+- Sanitization (`sanitizeName`, `splitPath`, `lockKey`, `guardPublicPath`) lives in `src/storage/sanitize.js` and is exercised by the Appendix C corpus in `tests/storage/sanitize.test.js` — don't bypass these helpers.
+- Every public write goes through `Storage.writeText` / `Storage.writeBytes`; no raw `createWritable` outside `src/storage/`.
+- Lock names come from `lockKey(relPath)` — never hand-build `"write:..."` strings.
+- The `.app/` folder is sealed from public writes via `guardPublicPath`. Audit-log mutations go through internal helpers only.
+
 ```
 

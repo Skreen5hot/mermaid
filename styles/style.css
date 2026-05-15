@@ -612,6 +612,115 @@ input:checked + .slider:before {
   transform: translateX(26px);
 }
 
+/* --- Reconnect banner (FSA permission lapsed) --- */
+.reconnect-banner {
+  display: none; /* shown via .visible class */
+  background-color: #fff3cd;
+  color: #856404;
+  border-bottom: 1px solid #ffeeba;
+  padding: 0.6rem 1rem;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+}
+
+.reconnect-banner.visible {
+  display: flex;
+}
+
+.reconnect-banner button {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05rem;
+}
+
+.reconnect-banner button:hover {
+  background-color: var(--accent-hover);
+}
+
+.persistent-note {
+  display: none;
+  font-size: 0.85rem;
+  color: #856404;
+  margin-left: 0.25rem;
+}
+
+.persistent-note.visible {
+  display: inline;
+}
+
+body.dark-mode .reconnect-banner {
+  background-color: #5a4a1f;
+  color: #f1c40f;
+  border-bottom-color: #756339;
+}
+
+body.dark-mode .persistent-note {
+  color: #f1c40f;
+}
+
+/* --- Mode picker (in New Project modal) --- */
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  gap: 0.6rem;
+  transition: background-color 0.15s;
+}
+
+.mode-option:hover {
+  background-color: var(--hover-bg);
+}
+
+.mode-option input[type="radio"] {
+  width: auto;
+  margin: 0.2rem 0 0 0;
+  flex-shrink: 0;
+}
+
+.mode-option-label {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.mode-option-label small {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.mode-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mode-option.disabled:hover {
+  background-color: transparent;
+}
+
+.mode-option.disabled .mode-option-detail {
+  color: var(--danger-color);
+}
+
 /* --- Fullscreen Mode --- */
 body.fullscreen-active header,
 body.fullscreen-active footer {
