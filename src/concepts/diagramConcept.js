@@ -3,12 +3,72 @@ import { tracer } from '../utils/tracer.js';
 
 const bus = createEventBus();
 
+const AUTOSAVE_PREF_KEY = 'mermaidide.autoSave';
+const AUTOSAVE_IDLE_MS = 5000;
+
+function _loadAutoSavePref() {
+    try {
+        if (typeof localStorage === 'undefined') return false;
+        return localStorage.getItem(AUTOSAVE_PREF_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function _persistAutoSavePref(enabled) {
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(AUTOSAVE_PREF_KEY, enabled ? '1' : '0');
+        }
+    } catch { /* private mode, quota exhausted — ignore */ }
+}
+
 const initialState = {
     diagrams: [],
-    currentDiagram: null, // { id, name, content, projectId }
+    currentDiagram: null, // { id, name, content, projectId, isDirty }
+    autoSaveEnabled: _loadAutoSavePref(),
 };
 
 let state = { ...initialState };
+
+// Autosave timer is module-private so user-facing state isn't cluttered.
+let _autoSaveTimer = null;
+
+function _cancelAutoSave() {
+    if (_autoSaveTimer !== null) {
+        clearTimeout(_autoSaveTimer);
+        _autoSaveTimer = null;
+    }
+}
+
+function _scheduleAutoSave() {
+    _cancelAutoSave();
+    if (!state.autoSaveEnabled) return;
+    if (!state.currentDiagram) return;
+    if (state.currentDiagram.id == null) return;   // unsaved diagrams need a name first
+    if (!state.currentDiagram.isDirty) return;
+    _autoSaveTimer = setTimeout(() => {
+        _autoSaveTimer = null;
+        // Re-check at fire time — state may have changed since we scheduled.
+        if (state.autoSaveEnabled
+            && state.currentDiagram
+            && state.currentDiagram.id != null
+            && state.currentDiagram.isDirty) {
+            _saveCurrentDiagram();
+        }
+    }, AUTOSAVE_IDLE_MS);
+}
+
+function _setAutoSave({ enabled }) {
+    state.autoSaveEnabled = !!enabled;
+    _persistAutoSavePref(state.autoSaveEnabled);
+    if (state.autoSaveEnabled) {
+        _scheduleAutoSave(); // may fire later if currently dirty
+    } else {
+        _cancelAutoSave();
+    }
+    bus.notify('autoSaveToggled', { enabled: state.autoSaveEnabled });
+}
 
 // --- Utility ---
 function debounce(func, delay) {
@@ -56,6 +116,20 @@ function _setDiagrams({ diagrams, project }) {
 }
 
 function _setCurrentDiagram({ diagramId }) {
+    // Save-on-switch: if the currently-open diagram has unsaved edits,
+    // persist them before loading the new one. Without this, users who
+    // click between diagrams faster than the 5-second autosave debounce
+    // lose work silently — and autosave being on creates a false sense of
+    // safety. The save is dispatched with becomeCurrent:false so it doesn't
+    // try to claim the new selection when it lands; the user has already
+    // moved on.
+    if (state.currentDiagram?.isDirty && state.currentDiagram?.id != null) {
+        _cancelAutoSave();
+        bus.notify('do:saveDiagram', {
+            diagramData: state.currentDiagram,
+            becomeCurrent: false,
+        });
+    }
     if (diagramId) {
         bus.notify('do:loadDiagram', { diagramId });
     } else {
@@ -65,10 +139,10 @@ function _setCurrentDiagram({ diagramId }) {
 }
 
 function _handleDiagramLoaded(diagram) {
-    state.currentDiagram = diagram;
+    _cancelAutoSave();
+    state.currentDiagram = diagram ? { ...diagram, isDirty: false } : null;
     tracer.logStep('DiagramConcept: Diagram data loaded from storage');
-    bus.notify('diagramContentLoaded', { diagram }); // This handles editor/main view updates.
-    // Fire a specific, lightweight event for just updating the selection in the UI list.
+    bus.notify('diagramContentLoaded', { diagram: state.currentDiagram });
     bus.notify('diagramSelectionChanged', { currentDiagramId: state.currentDiagram?.id });
 }
 
@@ -76,28 +150,24 @@ function _createDiagram({ name, projectId, content }) {
     const newDiagramData = {
         name,
         projectId,
-        content: content || 'graph TD;\n  A-->B;', // Use provided content or a default.
+        content: content || 'graph TD;\n  A-->B;',
     };
-    bus.notify('do:saveDiagram', { diagramData: newDiagramData });
+    // becomeCurrent:true — the new diagram should be selected after save.
+    bus.notify('do:saveDiagram', { diagramData: newDiagramData, becomeCurrent: true });
 }
 
 function _saveCurrentDiagram() {
-    console.log('`saveCurrentDiagram` action triggered.');
-
     if (!state.currentDiagram) {
         console.warn('Save ignored: No current diagram exists in the application state.');
         return;
     }
-
-    console.log('Current diagram state:', JSON.stringify(state.currentDiagram, null, 2));
-
-    // If the diagram has an ID, it's an existing diagram. Save it.
     if (state.currentDiagram.id) {
-        console.log(`Action: Saving existing diagram with ID: ${state.currentDiagram.id}. Emitting 'do:saveDiagram'.`);
-        bus.notify('do:saveDiagram', { diagramData: state.currentDiagram });
+        // Saving the currently-open diagram. It's already current; don't
+        // re-select on completion.
+        bus.notify('do:saveDiagram', { diagramData: state.currentDiagram, becomeCurrent: false });
     } else {
-        // If there's no ID, it's a new, unsaved diagram. Prompt for a name.
-        console.log("Action: This is a new diagram. Emitting 'do:showNewDiagramModal'.");
+        // No ID — unsaved scratch. Prompt for a name; the modal flow goes
+        // through _createDiagram, which sets becomeCurrent:true.
         bus.notify('do:showNewDiagramModal');
     }
 }
@@ -121,7 +191,9 @@ function _renameDiagram({ diagramId, newName }) {
     const diagramToRename = state.diagrams.find(d => d.id === diagramId);
     if (diagramToRename) {
         const updatedDiagram = { ...diagramToRename, name: newName };
-        bus.notify('do:saveDiagram', { diagramData: updatedDiagram });
+        // Rename: the diagram stays current if it was current already; don't
+        // force a re-selection.
+        bus.notify('do:saveDiagram', { diagramData: updatedDiagram, becomeCurrent: false });
     }
 }
 
@@ -131,9 +203,17 @@ function _deleteDiagram({ diagramId }) {
 
 function _updateCurrentDiagramContent({ content }) {
     if (state.currentDiagram) {
+        const prevContent = state.currentDiagram.content;
         state.currentDiagram.content = content;
+        // Only flip dirty when the content actually changed; programmatic
+        // re-renders (e.g. editor.value = content from renderEditor) can call
+        // through here with the same content.
+        if (prevContent !== content) {
+            state.currentDiagram.isDirty = true;
+            _scheduleAutoSave();
+        }
     }
-    // Notify that content has changed, for auto-rendering in split view
+    // Notify that content has changed, for auto-rendering in split view.
     bus.notify('diagramContentChanged', { content });
 }
 
@@ -144,16 +224,46 @@ const _debouncedLoadDiagrams = debounce((projectId) => {
 }, 100);
 
 function _handleDiagramSaved(savedDiagram) {
-    // After a diagram is saved, immediately set it as the current diagram.
-    // This provides instant feedback to the user by loading it into the editor.
-    _handleDiagramLoaded(savedDiagram);
+    // Three cases:
+    //   1. The save targets the currently-open diagram (manual Save, autosave,
+    //      rename) → update metadata, preserve in-memory content for any
+    //      keystrokes that landed during the save.
+    //   2. The save targets a different diagram AND was tagged becomeCurrent
+    //      (new diagram creation, upload) → make it the new current and
+    //      render fully — equivalent to a load.
+    //   3. The save targets a different diagram WITHOUT becomeCurrent
+    //      (save-on-switch race: the user already navigated away) → don't
+    //      touch state.currentDiagram. Just refresh the sidebar.
+    const sameAsCurrent = state.currentDiagram?.id != null
+        && state.currentDiagram.id === savedDiagram.id;
+    const becomeCurrent = !!savedDiagram.becomeCurrent;
 
-    // Then, trigger a debounced reload of the diagram list to update the sidebar.
+    if (sameAsCurrent) {
+        _cancelAutoSave();
+        state.currentDiagram = {
+            ...state.currentDiagram,
+            name: savedDiagram.name,
+            projectId: savedDiagram.projectId,
+            dateModified: savedDiagram.dateModified,
+        };
+        state.currentDiagram.isDirty = state.currentDiagram.content !== savedDiagram.content;
+        tracer.logStep('DiagramConcept: Diagram saved (current)');
+        bus.notify('diagramAfterSave', { diagram: state.currentDiagram });
+        bus.notify('diagramSelectionChanged', { currentDiagramId: state.currentDiagram.id });
+        if (state.currentDiagram.isDirty) _scheduleAutoSave();
+    } else if (becomeCurrent) {
+        // New diagram creation / upload — treat as a load.
+        _handleDiagramLoaded(savedDiagram);
+    }
+    // else: background save lost the race against a switch. Silently succeed;
+    // the sidebar refresh below will reflect the new content.
+
     _debouncedLoadDiagrams(savedDiagram.projectId);
 }
 
 function _handleDiagramDeleted({ diagramId }) {
     if (state.currentDiagram?.id === diagramId) {
+        _cancelAutoSave();
         state.currentDiagram = null;
         bus.notify('diagramContentLoaded', { diagram: null });
         // The list will be reloaded, and _setDiagrams will handle creating an unsaved diagram if needed.
@@ -166,17 +276,15 @@ function _handleDiagramDeleted({ diagramId }) {
 }
 
 function _initializeUnsavedDiagram({ content }) {
-    // Only initialize if there isn't already a diagram.
     if (!state.currentDiagram) {
-        state.currentDiagram = { id: null, name: '', content: content };
+        state.currentDiagram = { id: null, name: '', content, isDirty: false };
     }
-    // Crucially, we must notify the UI that this "unsaved" diagram is now the content.
-    // This replaces the problematic logic in synchronizations.js
     bus.notify('diagramContentLoaded', { diagram: state.currentDiagram });
 }
 
 function _reset() {
-    state = { ...initialState };
+    _cancelAutoSave();
+    state = { ...initialState, autoSaveEnabled: _loadAutoSavePref() };
 }
 
 const actions = {
@@ -194,14 +302,33 @@ const actions = {
     'handleDiagramSaved': _handleDiagramSaved,
     'initializeUnsavedDiagram': _initializeUnsavedDiagram,
     'handleDiagramDeleted': _handleDiagramDeleted,
-    'reset': _reset, // Expose for testing
+    'setAutoSave': _setAutoSave,
+    'reset': _reset,
+};
+
+// Test hooks — not part of the public contract. Let tests inspect/fire the
+// idle timer without using real wall-clock delays.
+const _test = {
+    isAutoSaveTimerPending: () => _autoSaveTimer !== null,
+    fireAutoSaveTimerNow: () => {
+        if (_autoSaveTimer === null) return false;
+        clearTimeout(_autoSaveTimer);
+        _autoSaveTimer = null;
+        if (state.autoSaveEnabled
+            && state.currentDiagram
+            && state.currentDiagram.id != null
+            && state.currentDiagram.isDirty) {
+            _saveCurrentDiagram();
+        }
+        return true;
+    },
 };
 
 export const diagramConcept = {
     subscribe: bus.subscribe,
     getState: () => ({ ...state }),
     notify: bus.notify,
-    reset: _reset, // Add a direct reset method for convenience in tests
+    reset: _reset,
     listen(event, payload) {
         if (actions[event]) {
             console.log(`[DiagramConcept] Action received: ${event}`, payload);
@@ -209,5 +336,6 @@ export const diagramConcept = {
         } else {
             bus.notify(event, payload);
         }
-    }
+    },
+    _test,
 };

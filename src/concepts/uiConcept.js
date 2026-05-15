@@ -20,15 +20,32 @@ let elements = {};
 function _cacheElements() {
     const ids = [
         'code-tab', 'diagram-tab', 'code-view', 'diagram-view', 'code-editor',
-        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'theme-toggle',
+        'diagram-container', 'file-info', 'split-view-btn', 'project-sidebar', 'project-selector', 'diagram-list', 'autosave-toggle',
         'new-project-btn', 'delete-project-btn', 'new-btn', 'save-btn',
         'delete-btn', 'rename-btn', 'fullscreen-btn', 'new-modal', 'new-name', 'new-cancel-btn',
         'new-create-btn', 'upload-diagrams-input', 'download-project-btn', 'sidebar-resizer',
         'split-view-resizer',
-        'export-mmd-btn', 'render-btn'
+        'export-mmd-btn', 'render-btn',
+        // 1.5 additions: FSA UI surface.
+        'reconnect-banner', 'reconnect-btn', 'persistent-note',
+        'new-project-modal', 'new-project-name', 'new-project-cancel-btn', 'new-project-create-btn',
+        'new-project-mode-fsa-label',
+        'foreign-folder-modal', 'foreign-folder-nest-btn', 'foreign-folder-repick-btn',
+        'sync-info-modal', 'sync-info-ok-btn', 'sync-info-repick-btn',
+        // Phase 2 additions: IDB → FSA export.
+        'export-project-btn', 'export-project-modal', 'export-source-name',
+        'export-diagram-count', 'export-dest-name', 'export-cancel-btn', 'export-confirm-btn',
     ];
     ids.forEach(id => elements[id] = document.getElementById(id));
 }
+
+// FSA flow state held in the UI concept. The synchronization layer reads it
+// off the events we emit (ui:syncInfoAcknowledged, ui:foreignFolderNest)
+// rather than introspecting this module.
+let _pendingFsaProjectName = null;
+function _setPendingFsa(name) { _pendingFsaProjectName = name; }
+function _clearPendingFsa() { _pendingFsaProjectName = null; }
+function _isChromiumFsa() { return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'; }
 
 function _initialize() {
     _cacheElements();
@@ -78,80 +95,139 @@ function _initResizers() {
     createResizer(splitViewResizer, codeView, diagramView);
 }
 
+// Parses an SVG string from mermaid.render and returns the <svg> element,
+// or null if parsing failed. Replaces `container.innerHTML = svg`, which
+// is the canonical Trusted-Types-incompatible sink.
+function _svgFromString(svgString) {
+    const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+    if (doc.documentElement.tagName === 'parsererror' || doc.documentElement.namespaceURI !== 'http://www.w3.org/2000/svg') {
+        return null;
+    }
+    return doc.documentElement;
+}
+
+function _renderMermaidErrorInto(container, error) {
+    console.error('Mermaid syntax or rendering error:', error);
+    // Mermaid's parse errors aren't always Error objects — fall back through
+    // a few shapes. The text goes through textContent so the user's diagram
+    // body can't escape the error pane.
+    const errorMessage = error.str || error.message || error.toString();
+
+    const pre = document.createElement('pre');
+    pre.className = 'mermaid-error';
+    pre.style.cssText = 'height: 100%; overflow-y: auto; white-space: pre-wrap; word-break: break-all;';
+
+    const heading = document.createElement('strong');
+    heading.textContent = 'Syntax Error:';
+    pre.appendChild(heading);
+    pre.appendChild(document.createTextNode('\n' + errorMessage));
+
+    container.replaceChildren(pre);
+}
+
 async function _renderMermaidDiagram({ content }) {
-    if (!elements['diagram-container']) return;
+    const container = elements['diagram-container'];
+    if (!container) return;
 
     const diagramContent = content || 'graph TD\n  A["No diagram content"]';
 
     try {
-        // First, validate the syntax. This will throw an error on failure.
         await mermaid.parse(diagramContent);
-
-        // If parsing is successful, then render the diagram.
         const { svg } = await mermaid.render(`mermaid-svg-${Date.now()}`, diagramContent);
-        elements['diagram-container'].innerHTML = svg;
+        const svgEl = _svgFromString(svg);
+        if (!svgEl) throw new Error('Mermaid produced unparseable SVG');
+        container.replaceChildren(svgEl);
     } catch (error) {
-        console.error("Mermaid syntax or rendering error:", error);
-        // Display a clean, contained error message instead of letting Mermaid break the UI.
-        // We use .toString() because the error from mermaid.parse() is not a standard Error object.
-        const errorMessage = (error.str || error.message || error.toString()).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const errorStyle = `
-            height: 100%; 
-            overflow-y: auto; 
-            white-space: pre-wrap; 
-            word-break: break-all;
-        `;
-        elements['diagram-container'].innerHTML = `<pre class="mermaid-error" style="${errorStyle}"><strong>Syntax Error:</strong>\n${errorMessage}</pre>`;
+        _renderMermaidErrorInto(container, error);
     }
 }
 
 function _renderProjectSelector({ projects, currentProjectId }) {
-    if (!elements['project-selector']) return;
-    elements['project-selector'].innerHTML = projects
-        .map(p => `<option value="${p.id}" ${p.id === currentProjectId ? 'selected' : ''}>${p.name}</option>`)
-        .join('');
+    const selector = elements['project-selector'];
+    if (!selector) return;
+    const options = projects.map((p) => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        if (p.id === currentProjectId) opt.selected = true;
+        return opt;
+    });
+    selector.replaceChildren(...options);
+}
+
+// Mermaid uses the SVG id as a CSS selector internally; our compound ids
+// ("idb:N", "fsa:folder/name") contain ":" and "/" which are illegal there.
+// Replace with underscores to produce a safe-for-CSS id without losing
+// uniqueness against other diagrams.
+function _safeIdForMermaid(id) {
+    return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function _thumbnailErrorNode(message) {
+    const errEl = document.createElement('div');
+    errEl.className = 'thumbnail-error';
+    errEl.textContent = message;
+    return errEl;
 }
 
 async function _renderSingleThumbnail(diagram) {
     const thumbnailContainer = document.getElementById(`thumbnail-container-${diagram.id}`);
     if (!thumbnailContainer) return;
 
-    let thumbnailSvg = '';
+    const safeId = _safeIdForMermaid(diagram.id);
+    const source = diagram.content || 'graph TD; A(( ))';
     try {
-        await mermaid.parse(diagram.content || 'graph TD; A(( ))');
-        const { svg } = await mermaid.render(`thumbnail-${diagram.id}-${Date.now()}`, diagram.content || 'graph TD; A(( ))');
-        thumbnailSvg = svg;
+        await mermaid.parse(source);
+        const { svg } = await mermaid.render(`thumbnail-${safeId}-${Date.now()}`, source);
+        const svgEl = _svgFromString(svg);
+        if (!svgEl) throw new Error('Mermaid produced unparseable SVG');
+        thumbnailContainer.replaceChildren(svgEl);
     } catch (e) {
-        thumbnailSvg = '<div class="thumbnail-error">Invalid Syntax</div>';
+        thumbnailContainer.replaceChildren(_thumbnailErrorNode('Invalid Syntax'));
     }
-    thumbnailContainer.innerHTML = thumbnailSvg;
+}
+
+function _buildDiagramListItem(diagram, currentDiagramId) {
+    const li = document.createElement('li');
+    li.dataset.diagramId = diagram.id;
+    if (diagram.id === currentDiagramId) li.classList.add('active');
+
+    const thumbnail = document.createElement('div');
+    thumbnail.className = 'diagram-thumbnail';
+    thumbnail.id = `thumbnail-container-${diagram.id}`;
+
+    const loader = document.createElement('div');
+    loader.className = 'thumbnail-loader';
+    thumbnail.appendChild(loader);
+
+    const name = document.createElement('span');
+    name.className = 'diagram-name';
+    name.textContent = diagram.name;
+
+    li.appendChild(thumbnail);
+    li.appendChild(name);
+    return li;
 }
 
 function _renderDiagramList({ diagrams, currentDiagramId }) {
-    if (!elements['diagram-list']) return;
+    const list = elements['diagram-list'];
+    if (!list) return;
 
     if (!diagrams || diagrams.length === 0) {
-        elements['diagram-list'].innerHTML = '<li class="no-diagrams">No diagrams in this project.</li>';
+        const empty = document.createElement('li');
+        empty.className = 'no-diagrams';
+        empty.textContent = 'No diagrams in this project.';
+        list.replaceChildren(empty);
         return;
     }
-    
-    // 1. Render the list immediately with placeholders
-    const listItemsHtml = diagrams.map(d => {
-        const isActive = d.id === currentDiagramId ? 'active' : '';
-        return `<li data-diagram-id="${d.id}" class="${isActive}">
-                    <div class="diagram-thumbnail" id="thumbnail-container-${d.id}">
-                        <div class="thumbnail-loader"></div>
-                    </div>
-                    <span class="diagram-name">${d.name}</span>
-                </li>`;
-    }).join('');
 
-    elements['diagram-list'].innerHTML = listItemsHtml;
+    // 1. Render the list immediately with placeholders.
+    const items = diagrams.map((d) => _buildDiagramListItem(d, currentDiagramId));
+    list.replaceChildren(...items);
 
-    // 2. Asynchronously render each thumbnail, allowing the UI to remain responsive.
-    diagrams.forEach(d => _renderSingleThumbnail(d));
+    // 2. Asynchronously render each thumbnail; UI stays responsive.
+    diagrams.forEach((d) => _renderSingleThumbnail(d));
 
-    // Log the end of the list rendering process
     tracer.logStep('UI: Finished rendering diagram list placeholders');
 }
 
@@ -221,19 +297,195 @@ function _hideNewDiagramModal() {
     }
 }
 
+// --- New Project modal ---
+
+function _showNewProjectModal() {
+    if (!elements['new-project-modal']) return;
+    // Reset form state every time we open.
+    if (elements['new-project-name']) elements['new-project-name'].value = '';
+    const idbRadio = document.querySelector?.('input[name="new-project-mode"][value="idb"]');
+    if (idbRadio) idbRadio.checked = true;
+
+    // Disable FSA radio on non-Chromium and visually mark the option.
+    const fsaRadio = document.querySelector?.('input[name="new-project-mode"][value="fsa"]');
+    const fsaLabel = elements['new-project-mode-fsa-label'];
+    if (fsaRadio && fsaLabel) {
+        const ok = _isChromiumFsa();
+        fsaRadio.disabled = !ok;
+        if (ok) {
+            fsaLabel.classList.remove('disabled');
+            fsaLabel.title = '';
+        } else {
+            fsaLabel.classList.add('disabled');
+            fsaLabel.title = 'Requires Chrome, Edge, or another Chromium browser.';
+        }
+    }
+
+    _updateNewProjectCreateBtn();
+    elements['new-project-modal'].style.display = 'flex';
+    elements['new-project-name']?.focus();
+}
+
+function _hideNewProjectModal() {
+    if (elements['new-project-modal']) {
+        elements['new-project-modal'].style.display = 'none';
+    }
+}
+
+function _getSelectedNewProjectMode() {
+    const checked = document.querySelector?.('input[name="new-project-mode"]:checked');
+    return checked ? checked.value : null;
+}
+
+function _updateNewProjectCreateBtn() {
+    const btn = elements['new-project-create-btn'];
+    if (!btn) return;
+    const name = elements['new-project-name']?.value.trim() || '';
+    const mode = _getSelectedNewProjectMode();
+    const fsaUnavailable = mode === 'fsa' && !_isChromiumFsa();
+    btn.disabled = name.length === 0 || !mode || fsaUnavailable;
+}
+
+// --- Foreign folder modal ---
+
+function _showForeignFolderModal() {
+    if (elements['foreign-folder-modal']) elements['foreign-folder-modal'].style.display = 'flex';
+}
+
+function _hideForeignFolderModal() {
+    if (elements['foreign-folder-modal']) elements['foreign-folder-modal'].style.display = 'none';
+}
+
+// --- Sync info modal ---
+
+function _showSyncInfoModal() {
+    if (elements['sync-info-modal']) elements['sync-info-modal'].style.display = 'flex';
+}
+
+function _hideSyncInfoModal() {
+    if (elements['sync-info-modal']) elements['sync-info-modal'].style.display = 'none';
+}
+
+// --- Export Project modal (Phase 2) ---
+
+let _pendingExport = null; // { sourceProjectId, sourceName }
+
+function _showExportProjectModal({ sourceProjectId, sourceName, diagramCount, defaultDestName } = {}) {
+    _pendingExport = { sourceProjectId, sourceName };
+    if (elements['export-source-name']) elements['export-source-name'].textContent = sourceName || '';
+    if (elements['export-diagram-count']) elements['export-diagram-count'].textContent = String(diagramCount ?? 0);
+    if (elements['export-dest-name']) elements['export-dest-name'].value = defaultDestName || sourceName || '';
+    if (elements['export-confirm-btn']) elements['export-confirm-btn'].disabled = false;
+    if (elements['export-project-modal']) elements['export-project-modal'].style.display = 'flex';
+    elements['export-dest-name']?.focus();
+}
+
+function _hideExportProjectModal() {
+    if (elements['export-project-modal']) elements['export-project-modal'].style.display = 'none';
+}
+
+function _setExportButtonVisible(visible) {
+    const btn = elements['export-project-btn'];
+    if (!btn) return;
+    btn.style.display = visible ? '' : 'none';
+}
+
+// --- Reconnect banner ---
+
+function _showReconnectBanner({ persistent = false } = {}) {
+    const banner = elements['reconnect-banner'];
+    const note = elements['persistent-note'];
+    if (banner) banner.classList.add('visible');
+    if (note) note.classList.toggle('visible', !!persistent);
+}
+
+function _hideReconnectBanner() {
+    const banner = elements['reconnect-banner'];
+    if (banner) banner.classList.remove('visible');
+}
+
+// --- Autosave toggle ---
+function _setAutoSaveToggle({ enabled } = {}) {
+    const t = elements['autosave-toggle'];
+    if (t) t.checked = !!enabled;
+}
+
 function _attachEventListeners() {
     elements['project-selector']?.addEventListener('change', (e) => bus.notify('ui:projectSelected', { projectId: e.target.value }));
-    elements['new-project-btn']?.addEventListener('click', () => {
-        const name = prompt('Enter new project name:');
-        if (name) bus.notify('ui:newProjectClicked', { name });
-    });
+    elements['new-project-btn']?.addEventListener('click', () => _showNewProjectModal());
     elements['delete-project-btn']?.addEventListener('click', () => bus.notify('ui:deleteProjectClicked'));
+
+    // --- New Project Modal listeners ---
+    elements['new-project-name']?.addEventListener('input', () => _updateNewProjectCreateBtn());
+    elements['new-project-cancel-btn']?.addEventListener('click', () => _hideNewProjectModal());
+    elements['new-project-create-btn']?.addEventListener('click', () => {
+        const name = elements['new-project-name']?.value.trim();
+        const mode = _getSelectedNewProjectMode();
+        if (!name || !mode) return;
+        // For FSA without a root, the sync layer will pick first; remember the name.
+        if (mode === 'fsa') _setPendingFsa(name);
+        _hideNewProjectModal();
+        bus.notify('ui:newProjectClicked', { name, mode });
+    });
+    // Radios: update create-btn enable state when mode changes.
+    const radios = document.querySelectorAll?.('input[name="new-project-mode"]');
+    radios?.forEach((r) => r.addEventListener('change', () => _updateNewProjectCreateBtn()));
+
+    // --- Foreign folder modal listeners ---
+    elements['foreign-folder-nest-btn']?.addEventListener('click', () => {
+        _hideForeignFolderModal();
+        bus.notify('ui:foreignFolderNest', { name: _pendingFsaProjectName });
+    });
+    elements['foreign-folder-repick-btn']?.addEventListener('click', () => {
+        _hideForeignFolderModal();
+        bus.notify('ui:foreignFolderRepick', { name: _pendingFsaProjectName });
+    });
+
+    // --- Sync info modal listeners ---
+    elements['sync-info-ok-btn']?.addEventListener('click', () => {
+        _hideSyncInfoModal();
+        const name = _pendingFsaProjectName;
+        _clearPendingFsa();
+        bus.notify('ui:syncInfoAcknowledged', { name });
+    });
+    elements['sync-info-repick-btn']?.addEventListener('click', () => {
+        _hideSyncInfoModal();
+        bus.notify('ui:syncInfoRepick', { name: _pendingFsaProjectName });
+    });
+
+    // --- Reconnect banner ---
+    elements['reconnect-btn']?.addEventListener('click', () => bus.notify('ui:reconnectClicked'));
+
+    // --- Autosave toggle (header) ---
+    elements['autosave-toggle']?.addEventListener('change', (e) => {
+        bus.notify('ui:autoSaveToggled', { enabled: !!e.target.checked });
+    });
+
+    // --- Export project modal (Phase 2) ---
+    elements['export-project-btn']?.addEventListener('click', () => bus.notify('ui:exportProjectClicked'));
+    elements['export-cancel-btn']?.addEventListener('click', () => {
+        _hideExportProjectModal();
+        _pendingExport = null;
+    });
+    elements['export-dest-name']?.addEventListener('input', () => {
+        const btn = elements['export-confirm-btn'];
+        if (btn) btn.disabled = !(elements['export-dest-name']?.value.trim());
+    });
+    elements['export-confirm-btn']?.addEventListener('click', () => {
+        const destName = elements['export-dest-name']?.value.trim();
+        if (!destName || !_pendingExport) return;
+        const { sourceProjectId } = _pendingExport;
+        _pendingExport = null;
+        _hideExportProjectModal();
+        bus.notify('ui:exportProjectConfirmed', { sourceProjectId, destName });
+    });
 
     elements['diagram-list']?.addEventListener('click', (e) => {
         const listItem = e.target.closest('li[data-diagram-id]');
         if (listItem) {
             tracer.startTrace('Select Diagram');
-            const diagramId = parseInt(listItem.dataset.diagramId, 10);
+            // Diagram ids are opaque compound strings ("idb:N" / "fsa:folder/name").
+            const diagramId = listItem.dataset.diagramId;
             bus.notify('ui:diagramSelected', { diagramId });
         }
     });
@@ -356,6 +608,20 @@ const actions = {
     'showNewDiagramModal': _showNewDiagramModal,
     'switchTab': _switchTab,
     'toggleSplitView': _toggleSplitView,
+    // 1.5 additions: FSA flow modal/banner drivers.
+    'showForeignFolderModal': _showForeignFolderModal,
+    'hideForeignFolderModal': _hideForeignFolderModal,
+    'showSyncInfoModal': _showSyncInfoModal,
+    'hideSyncInfoModal': _hideSyncInfoModal,
+    'showReconnectBanner': _showReconnectBanner,
+    'hideReconnectBanner': _hideReconnectBanner,
+    'clearPendingFsa': _clearPendingFsa,
+    // Phase 2 additions.
+    'showExportProjectModal': _showExportProjectModal,
+    'hideExportProjectModal': _hideExportProjectModal,
+    'setExportButtonVisible': _setExportButtonVisible,
+    // Autosave.
+    'setAutoSaveToggle': _setAutoSaveToggle,
 };
 
 /**
@@ -377,4 +643,11 @@ export const uiConcept = {
         }
     },
     setMermaid: _setMermaid,
+    // Synchronous getter: returns the editor's current value or null. Used by
+    // the sync layer to flush the editor's in-flight typing into state before
+    // switching diagrams (the 300ms input debounce can otherwise lose the
+    // last few keystrokes).
+    getEditorContent() {
+        return elements['code-editor']?.value ?? null;
+    },
 };

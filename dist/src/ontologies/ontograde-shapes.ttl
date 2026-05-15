@@ -1,0 +1,568 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix cco: <http://www.ontologyrepository.com/CommonCoreOntologies/> .
+@prefix bfo: <http://purl.obolibrary.org/obo/> .
+@prefix ograde: <http://example.org/ontograde/shapes/> .
+
+# =============================================================================
+# OntoGrade SHACL Shapes for CCO Design Pattern Validation
+# =============================================================================
+#
+# Project: OntoGrade - Mermaid Ontology IDE
+# Version: 1.0.0
+# Date: 2026-01-09
+#
+# These shapes validate Common Core Ontology (CCO) design patterns in
+# user-created Mermaid diagrams. They are used by the OntoGrade validation
+# system to provide quality feedback.
+#
+# CCO Reference: https://github.com/CommonCoreOntology/CommonCoreOntologies
+# BFO Reference: http://basic-formal-ontology.org/
+#
+# =============================================================================
+# PATTERN 1: Information Staircase Pattern
+# =============================================================================
+#
+# The Information Staircase represents how information content is concretized
+# in physical bearers and ultimately expressed as text or other data.
+#
+# BFO Principle: An ICE (Information Content Entity) is a Generically Dependent
+# Continuant. It can exist abstractly (like a Law or Recipe) even if not
+# currently concretized. However, for practical use, concretization is expected.
+#
+# Required Structure:
+#   InformationContentEntity (ICE)
+#     └── is_concretized_by → InformationBearingEntity (IBE)
+#           └── has_text_value → xsd:string (Literal)
+#
+# Example (Correct):
+#   PersonName (ICE) → is_concretized_by → NameRecord (IBE) → has_text_value → "John Doe"
+#
+# Example (Warning):
+#   PersonName (ICE) [missing is_concretized_by - valid abstractly but incomplete]
+#
+# EXPERT REVIEW (2026-01-09):
+# - Changed severity to Warning: ICE can exist abstractly without concretization
+# - Added inverse validation: IBE should bear information (concretizes ICE)
+#
+# =============================================================================
+
+ograde:InformationContentEntityShape
+    a sh:NodeShape ;
+    sh:targetClass cco:InformationContentEntity ;
+    sh:name "Information Content Entity Shape" ;
+    sh:description "Validates that InformationContentEntity follows the Information Staircase pattern" ;
+
+    # Rule 1: ICE should have is_concretized_by relationship to an IBE
+    # EXPERT FEEDBACK: Changed to Warning - ICE can exist abstractly
+    sh:property [
+        sh:path cco:is_concretized_by ;
+        sh:name "ICE Concretization Rule" ;
+        sh:description "ICE should be concretized by at least one Information Bearing Entity" ;
+        sh:minCount 1 ;
+        sh:class cco:InformationBearingEntity ;
+        sh:severity sh:Warning ;
+        sh:message "InformationContentEntity should have an is_concretized_by relationship to an InformationBearingEntity. While an ICE can exist abstractly (like a Law or Recipe), for practical modeling it should be concretized in a physical bearer." ;
+    ] .
+
+ograde:InformationBearingEntityShape
+    a sh:NodeShape ;
+    sh:targetClass cco:InformationBearingEntity ;
+    sh:name "Information Bearing Entity Shape" ;
+    sh:description "Validates that InformationBearingEntity bears information (is not a blank slate)" ;
+
+    # Rule 2: IBE should concretize at least one ICE
+    # EXPERT FEEDBACK: An IBE that bears no information is a "blank slate" - rarely intended
+    sh:property [
+        sh:path cco:concretizes ;
+        sh:name "IBE Concretization Rule" ;
+        sh:description "IBE should concretize at least one ICE" ;
+        sh:minCount 1 ;
+        sh:class cco:InformationContentEntity ;
+        sh:severity sh:Warning ;
+        sh:message "InformationBearingEntity should concretize at least one InformationContentEntity. An IBE without information is a 'blank slate' which is rarely the modeling intent." ;
+    ] ;
+
+    # Rule 3: IBE should have has_text_value when concretizing an ICE
+    sh:property [
+        sh:path cco:has_text_value ;
+        sh:name "IBE Text Value Rule" ;
+        sh:description "IBE should have a text value to complete the Information Staircase" ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message "InformationBearingEntity should have a has_text_value relationship to a string literal. This completes the Information Staircase pattern from abstract information to concrete text." ;
+    ] .
+
+# =============================================================================
+# PATTERN 2: Role Pattern
+# =============================================================================
+#
+# Roles are dispositional properties (Dispositions in BFO) that entities bear
+# and processes may realize.
+#
+# BFO Principle: A Disposition exists even if never realized. For example,
+# a "Fire Extinguisher Role" exists even if the extinguisher never puts out
+# a fire. However, a Role CANNOT exist without a bearer.
+#
+# Required Structure:
+#   IndependentContinuant (Entity)
+#     └── is_bearer_of → Role (REQUIRED - Violation if missing)
+#   Process
+#     └── realizes → Role (OPTIONAL - Warning if missing)
+#
+# Example (Correct - fully realized):
+#   Person → is_bearer_of → EmployeeRole
+#   WorkProcess → realizes → EmployeeRole
+#
+# Example (Valid - dormant disposition):
+#   FireExtinguisher → is_bearer_of → FireSuppressionRole
+#   [No realization - the role exists but hasn't been actualized]
+#
+# Example (Violation - impossible):
+#   EmployeeRole [no entity bears this role - ontologically impossible]
+#
+# EXPERT REVIEW (2026-01-09):
+# - Bearer: VIOLATION - Role cannot exist without bearer (BFO principle)
+# - Realization: WARNING - Dispositions can remain dormant (BFO principle)
+# - Added type validation for bearer (IndependentContinuant) and realizer (Process)
+#
+# =============================================================================
+
+ograde:RoleShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Role ;
+    sh:name "Role Shape" ;
+    sh:description "Validates that Role entities follow the CCO Role pattern based on BFO disposition principles" ;
+
+    # Rule 1: Role MUST be borne by at least one entity (VIOLATION)
+    # BFO Principle: A Role cannot exist without a bearer - this is ontologically impossible
+    sh:property [
+        sh:path [ sh:inversePath cco:is_bearer_of ] ;
+        sh:name "Role Bearer Rule" ;
+        sh:description "Role must be borne by at least one IndependentContinuant" ;
+        sh:minCount 1 ;
+        sh:class bfo:BFO_0000004 ;  # IndependentContinuant
+        sh:severity sh:Violation ;
+        sh:message "Role must be borne by at least one entity via is_bearer_of relationship. In BFO, a Role (Disposition) cannot exist without a bearer - this is ontologically impossible. Add: Entity → is_bearer_of → Role" ;
+    ] ;
+
+    # Rule 2: Role SHOULD be realized by at least one process (WARNING)
+    # BFO Principle: Dispositions can remain dormant - a fire extinguisher role exists
+    # even if no fire ever occurs. Realization is expected but not required.
+    sh:property [
+        sh:path [ sh:inversePath cco:realizes ] ;
+        sh:name "Role Realization Rule" ;
+        sh:description "Role should be realized by at least one Process" ;
+        sh:minCount 1 ;
+        sh:class bfo:BFO_0000015 ;  # Process
+        sh:severity sh:Warning ;
+        sh:message "Role is not realized by any Process. While dispositions can remain dormant (per BFO), consider adding a realizes relationship if this role has been actualized. Add: Process → realizes → Role" ;
+    ] .
+
+# =============================================================================
+# PATTERN 3: Designation Pattern
+# =============================================================================
+#
+# Designative Information Content Entities represent names, identifiers, and
+# other linguistic designators that refer to entities in the world.
+#
+# CCO Principle: In CCO, `designates` is the standard functional direction.
+# `is_designated_by` is the inverse. A Designative ICE that doesn't designate
+# anything is just a string of characters without semantic reference.
+#
+# Required Structure (EITHER direction accepted for modeling flexibility):
+#   DesignativeInformationContentEntity
+#     └── designates → Entity (PREFERRED)
+#   OR
+#   Entity
+#     └── is_designated_by → DesignativeInformationContentEntity
+#
+# Example (Correct - preferred direction):
+#   PersonName (DesignativeICE) → designates → Person
+#
+# Example (Correct - inverse direction):
+#   Person → is_designated_by → PersonName (DesignativeICE)
+#
+# Example (Violation):
+#   PersonName (DesignativeICE) [not linked to any entity - just characters]
+#
+# EXPERT REVIEW (2026-01-09):
+# - Changed to VIOLATION: A "Name" that names nothing is not a Designative ICE
+#   in a realist sense; it's just an ICE (Information Content Entity)
+# - Either direction is acceptable for user flexibility
+# - `designates` is the preferred/encouraged direction
+#
+# =============================================================================
+
+ograde:DesignativeInformationContentEntityShape
+    a sh:NodeShape ;
+    sh:targetClass cco:DesignativeInformationContentEntity ;
+    sh:name "Designative ICE Shape" ;
+    sh:description "Validates that DesignativeInformationContentEntity designates something" ;
+
+    # Rule: DesignativeICE MUST designate something (VIOLATION)
+    # Either via `designates` (preferred) or inverse `is_designated_by`
+    # A "Name" that names nothing is not a Designative ICE - just characters
+    sh:or (
+        [
+            sh:property [
+                sh:path cco:designates ;
+                sh:minCount 1 ;
+            ]
+        ]
+        [
+            sh:property [
+                sh:path [ sh:inversePath cco:is_designated_by ] ;
+                sh:minCount 1 ;
+            ]
+        ]
+    ) ;
+    sh:severity sh:Violation ;
+    sh:message "DesignativeInformationContentEntity must designate an entity. A 'Name' that names nothing is not a Designative ICE in a realist sense - it's just an InformationContentEntity. Use: DesignativeICE → designates → Entity (preferred) or Entity → is_designated_by → DesignativeICE" .
+
+# =============================================================================
+# PATTERN 4: Temporal Interval Pattern
+# =============================================================================
+#
+# Temporal intervals represent bounded time periods with start and end points.
+#
+# Modeling Reality: Many processes are ongoing (no end time) or have unknown
+# starts. Therefore, both times are recommended but not required.
+#
+# Required Structure:
+#   TemporalInterval
+#     └── has_start_time → TemporalInstant (WARNING if missing)
+#     └── has_end_time → TemporalInstant (WARNING if missing)
+#
+# Constraints:
+#   - Start time should be ≤ end time (if both exist)
+#
+# EXPERT REVIEW (2026-01-09):
+# - Both times should be WARNING (not Violation)
+# - Many processes are ongoing or have unknown starts
+# - Added lessThanOrEquals validation for time ordering
+#
+# =============================================================================
+
+ograde:TemporalIntervalShape
+    a sh:NodeShape ;
+    sh:targetClass cco:TemporalInterval ;
+    sh:name "Temporal Interval Shape" ;
+    sh:description "Validates that TemporalInterval has proper time bounds" ;
+
+    # Rule 1: Should have start time (WARNING - may be unknown)
+    sh:property [
+        sh:path cco:has_start_time ;
+        sh:name "Interval Start Time Rule" ;
+        sh:description "Temporal interval should have a start time" ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "TemporalInterval should have a has_start_time relationship. If the start time is unknown, consider using an approximation or leaving undetermined." ;
+    ] ;
+
+    # Rule 2: Should have end time (WARNING - may be ongoing)
+    sh:property [
+        sh:path cco:has_end_time ;
+        sh:name "Interval End Time Rule" ;
+        sh:description "Temporal interval should have an end time" ;
+        sh:minCount 1 ;
+        sh:severity sh:Warning ;
+        sh:message "TemporalInterval should have a has_end_time relationship. For ongoing processes, the end time may be left undefined." ;
+    ] ;
+
+    # Rule 3: Start time must be ≤ end time (if both exist)
+    sh:property [
+        sh:path cco:has_start_time ;
+        sh:lessThanOrEquals cco:has_end_time ;
+        sh:severity sh:Violation ;
+        sh:message "TemporalInterval start time must be before or equal to end time. Backwards time intervals are logically impossible." ;
+    ] .
+
+# =============================================================================
+# PATTERN 5: Measurement Pattern
+# =============================================================================
+#
+# Measurements represent quantified values with units attached to qualities.
+# All three components are required for a valid measurement instance.
+#
+# Required Structure:
+#   Quality
+#     └── is_measured_by → QualityMeasurement (inverse direction per CCO)
+#   QualityMeasurement
+#     └── has_measurement_value → xsd:decimal
+#     └── uses_measurement_unit → MeasurementUnit
+#
+# EXPERT REVIEW (2026-01-09):
+# - Use `cco:is_measured_by` (from Quality to Measurement)
+# - All three components (Value, Unit, Quality) are REQUIRED
+# - Severity: VIOLATION for all rules
+#
+# =============================================================================
+
+ograde:QualityMeasurementShape
+    a sh:NodeShape ;
+    sh:targetClass cco:QualityMeasurement ;
+    sh:name "Quality Measurement Shape" ;
+    sh:description "Validates that QualityMeasurement has all required components" ;
+
+    # Rule 1: Must be linked to a Quality (via inverse is_measured_by)
+    sh:property [
+        sh:path [ sh:inversePath cco:is_measured_by ] ;
+        sh:name "Measurement Target Rule" ;
+        sh:description "Measurement must be linked to a Quality via is_measured_by" ;
+        sh:minCount 1 ;
+        sh:class bfo:BFO_0000019 ;  # Quality in BFO
+        sh:severity sh:Violation ;
+        sh:message "QualityMeasurement must be linked to a Quality via is_measured_by. A measurement without a target quality is meaningless." ;
+    ] ;
+
+    # Rule 2: Must have a numeric value (REQUIRED)
+    sh:property [
+        sh:path cco:has_measurement_value ;
+        sh:name "Measurement Value Rule" ;
+        sh:description "Measurement must have a numeric value" ;
+        sh:minCount 1 ;
+        sh:datatype xsd:decimal ;
+        sh:severity sh:Violation ;
+        sh:message "QualityMeasurement must have a has_measurement_value with a numeric literal. A measurement without a value is incomplete." ;
+    ] ;
+
+    # Rule 3: Must have a unit (REQUIRED)
+    sh:property [
+        sh:path cco:uses_measurement_unit ;
+        sh:name "Measurement Unit Rule" ;
+        sh:description "Measurement must specify a unit" ;
+        sh:minCount 1 ;
+        sh:class cco:MeasurementUnit ;
+        sh:severity sh:Violation ;
+        sh:message "QualityMeasurement must have a uses_measurement_unit relationship. A numeric value without a unit is ambiguous (is '5' meters, kilograms, or something else?)." ;
+    ] .
+
+# =============================================================================
+# PROPOSED PATTERN 6: Artifact Function Pattern (Draft)
+# =============================================================================
+#
+# Artifacts have functions that can be realized by processes.
+#
+# Required Structure:
+#   Artifact
+#     └── has_function → Function
+#   Function (optional)
+#     └── is_realized_by → Process
+#
+# =============================================================================
+
+ograde:ArtifactShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Artifact ;
+    sh:name "Artifact Shape" ;
+    sh:description "Validates that Artifact has at least one function" ;
+    sh:deactivated true ;  # Draft - not yet active
+
+    # Rule: Artifacts should have functions
+    sh:property [
+        sh:path cco:has_function ;
+        sh:name "Artifact Function Rule" ;
+        sh:description "Artifact should have at least one function" ;
+        sh:minCount 1 ;
+        sh:class cco:ArtifactFunction ;
+        sh:severity sh:Warning ;
+        sh:message "Artifact should have at least one has_function relationship. Artifacts are created with purposes/functions in mind." ;
+    ] .
+
+# =============================================================================
+# PROPOSED PATTERN 7: Agent Capability Pattern (Draft)
+# =============================================================================
+#
+# Agents have capabilities that can be realized in acts.
+#
+# Required Structure:
+#   Agent
+#     └── has_capability → Capability
+#   Capability (optional)
+#     └── is_realized_in → Act
+#
+# =============================================================================
+
+ograde:AgentShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Agent ;
+    sh:name "Agent Shape" ;
+    sh:description "Validates Agent capability patterns" ;
+    sh:deactivated true ;  # Draft - not yet active
+
+    # Rule: Agents may have capabilities (soft constraint)
+    sh:property [
+        sh:path cco:has_capability ;
+        sh:name "Agent Capability Rule" ;
+        sh:description "Agent may have capabilities" ;
+        sh:class cco:Capability ;
+        sh:severity sh:Info ;
+        sh:message "Consider adding has_capability relationships to describe what this Agent can do" ;
+    ] .
+
+# =============================================================================
+# PROPOSED PATTERN 8: Act Participant Pattern (Draft)
+# =============================================================================
+#
+# Acts have agents and participants.
+#
+# Required Structure:
+#   Act
+#     └── has_agent → Agent
+#     └── has_participant → Entity (optional, depending on act type)
+#
+# =============================================================================
+
+ograde:ActShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Act ;
+    sh:name "Act Shape" ;
+    sh:description "Validates Act participation patterns" ;
+    sh:deactivated true ;  # Draft - not yet active
+
+    # Rule: Acts should have at least one agent
+    sh:property [
+        sh:path cco:has_agent ;
+        sh:name "Act Agent Rule" ;
+        sh:description "Act should have at least one agent" ;
+        sh:minCount 1 ;
+        sh:class cco:Agent ;
+        sh:severity sh:Warning ;
+        sh:message "Act should have at least one has_agent relationship. Acts are performed by agents." ;
+    ] .
+
+# =============================================================================
+# PROPOSED PATTERN 9: Organization Membership Pattern (Draft)
+# =============================================================================
+#
+# Organizations have members (agents).
+#
+# Required Structure:
+#   Organization
+#     └── has_member → Agent
+#   Agent
+#     └── is_member_of → Organization
+#
+# =============================================================================
+
+ograde:OrganizationShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Organization ;
+    sh:name "Organization Shape" ;
+    sh:description "Validates Organization membership patterns" ;
+    sh:deactivated true ;  # Draft - not yet active
+
+    # Rule: Organizations may have members (soft constraint)
+    sh:property [
+        sh:path cco:has_member ;
+        sh:name "Organization Member Rule" ;
+        sh:description "Organization may have members" ;
+        sh:class cco:Agent ;
+        sh:severity sh:Info ;
+        sh:message "Consider adding has_member relationships to describe who belongs to this Organization" ;
+    ] .
+
+# =============================================================================
+# PATTERN 10: Socio-Primal Pattern (NEW - Expert Recommendation)
+# =============================================================================
+#
+# The Socio-Primal Pattern captures how Agents participate in Acts over time.
+# This pattern is fundamental to modeling organizational and social structures.
+#
+# Required Structure:
+#   Agent
+#     └── participates_in → Act
+#   Act
+#     └── occurs_during → TemporalInterval
+#   Agent (stasis relationships)
+#     └── is_affiliated_with → Organization
+#     └── works_at → Facility
+#
+# EXPERT REVIEW (2026-01-09):
+# - This pattern was identified as MISSING from our original set
+# - Critical for modeling agent participation in temporal activities
+#
+# =============================================================================
+
+ograde:SocioPrimalAgentShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Agent ;
+    sh:name "Socio-Primal Agent Shape" ;
+    sh:description "Validates Agent participation patterns in social/organizational contexts" ;
+
+    # Rule 1: Agents may participate in Acts
+    sh:property [
+        sh:path cco:participates_in ;
+        sh:name "Agent Participation Rule" ;
+        sh:description "Agent may participate in Acts" ;
+        sh:class cco:Act ;
+        sh:severity sh:Info ;
+        sh:message "Consider adding participates_in relationships to describe what Acts this Agent engages in." ;
+    ] ;
+
+    # Rule 2: Agents may be affiliated with Organizations
+    sh:property [
+        sh:path cco:is_affiliated_with ;
+        sh:name "Agent Affiliation Rule" ;
+        sh:description "Agent may be affiliated with Organizations" ;
+        sh:class cco:Organization ;
+        sh:severity sh:Info ;
+        sh:message "Consider adding is_affiliated_with relationships to describe organizational memberships." ;
+    ] .
+
+ograde:SocioPrimalActShape
+    a sh:NodeShape ;
+    sh:targetClass cco:Act ;
+    sh:name "Socio-Primal Act Shape" ;
+    sh:description "Validates that Acts have temporal grounding" ;
+
+    # Rule: Acts should occur during a TemporalInterval
+    sh:property [
+        sh:path cco:occurs_during ;
+        sh:name "Act Temporal Grounding Rule" ;
+        sh:description "Act should have temporal context" ;
+        sh:minCount 1 ;
+        sh:class cco:TemporalInterval ;
+        sh:severity sh:Warning ;
+        sh:message "Act should have an occurs_during relationship to a TemporalInterval. Temporal grounding helps establish when the act took place." ;
+    ] ;
+
+    # Rule: Acts should have at least one participant
+    sh:property [
+        sh:path [ sh:inversePath cco:participates_in ] ;
+        sh:name "Act Participant Rule" ;
+        sh:description "Act should have at least one participant" ;
+        sh:minCount 1 ;
+        sh:class cco:Agent ;
+        sh:severity sh:Warning ;
+        sh:message "Act should have at least one Agent participant. Acts without participants are abstract descriptions." ;
+    ] .
+
+# =============================================================================
+# VALIDATION METADATA
+# =============================================================================
+
+ograde:OntoGradeShapesGraph
+    a sh:ShapesGraph ;
+    rdfs:label "OntoGrade CCO Pattern Shapes" ;
+    rdfs:comment "SHACL shapes for validating Common Core Ontology design patterns in the OntoGrade system. Active shapes: InformationContentEntityShape, InformationBearingEntityShape, RoleShape, DesignativeInformationContentEntityShape. Draft shapes (deactivated): TemporalIntervalShape, QualityMeasurementShape, ArtifactShape, AgentShape, ActShape, OrganizationShape." ;
+    sh:declare [
+        sh:prefix "cco" ;
+        sh:namespace "http://www.ontologyrepository.com/CommonCoreOntologies/"^^xsd:anyURI ;
+    ] ;
+    sh:declare [
+        sh:prefix "bfo" ;
+        sh:namespace "http://purl.obolibrary.org/obo/"^^xsd:anyURI ;
+    ] ;
+    sh:declare [
+        sh:prefix "ograde" ;
+        sh:namespace "http://example.org/ontograde/shapes/"^^xsd:anyURI ;
+    ] .
+
+# =============================================================================
+# END OF SHAPES FILE
+# =============================================================================

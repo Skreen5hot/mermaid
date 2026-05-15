@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Syntax Viewer & Editor</title>
+
+    <!-- Import Map: Use CDN that handles module resolution -->
+    <script type="importmap">
+    {
+      "imports": {
+        "n3": "https://esm.sh/n3@1.17.2"
+      }
+    }
+    </script>
+
+    <link rel="stylesheet" href="styles/normalize.min.css">
+    <link rel="stylesheet" href="styles/skeleton.css">
+    <link rel="stylesheet" href="styles/style.css">
+</head>
+<body>
+
+<header>
+    <span>Mermaid Project IDE</span>
+</header>
+
+<main>
+    <aside id="project-sidebar">
+        <div id="sidebar-header">
+            <h3>Projects</h3>
+        </div>
+        <div id="project-selector-container">
+            <select id="project-selector" title="Project Selector"></select>
+            <button id="new-project-btn" title="New Project">+</button>
+            <button id="project-settings-btn" title="Project Settings">⚙️</button>
+        </div>
+        <ul id="diagram-list">
+            <!-- Diagram list items will be populated by JS -->
+        </ul>
+        <div id="sidebar-footer">
+            <label for="upload-diagrams-input" class="sidebar-btn">Upload .mmd</label>
+            <input type="file" id="upload-diagrams-input" accept=".mmd" multiple hidden>
+            <button id="download-project-btn" class="sidebar-btn">Download .zip</button>
+        </div>
+    </aside>
+
+    <div class="resizer" id="sidebar-resizer"></div>
+
+    <div id="main-content">
+        <section id="tabs">
+            <button id="code-tab" class="active" role="tab" aria-selected="true">Code</button>
+            <button id="diagram-tab" role="tab" aria-selected="false">Diagram</button>
+            <button id="split-view-btn">Split</button>
+        </section>
+
+        <section id="content-area">
+            <div id="code-view" class="content-view active">
+                <div id="toolbar">
+                    <button id="new-btn">New</button>
+                    <button id="save-btn">Save</button>
+                    <button id="delete-btn">Delete</button>
+                    <button id="rename-btn">Rename</button>
+                <button id="export-mmd-btn">Export .mmd</button>
+                <button id="ontograde-btn" title="Evaluate Ontology Quality">🎓 OntoGrade</button>
+                <button id="pattern-library-btn" title="Browse CCO Design Patterns">📚 Patterns</button>
+                <button id="fullscreen-btn" title="Toggle Fullscreen">⇱</button>
+                </div>
+                <div id="file-info">No file open.</div>
+                <textarea id="code-editor" placeholder="Create a 'NEW' graph or open an existing one."></textarea>
+            </div>
+
+            <div class="resizer" id="split-view-resizer"></div>
+
+            <div id="diagram-view" class="content-view">
+                <div id="diagram-toolbar">
+                    <button id="render-btn">Render</button>
+                </div>
+                <div id="diagram-container"></div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<footer>
+    <div id="sync-status">
+        <span id="sync-status-icon"></span>
+        <span id="sync-status-text"></span>
+    </div>
+    Version 1.0
+</footer>
+
+<!-- New Diagram Modal -->
+<div id="new-modal" class="modal">
+    <div class="modal-content">
+        <h2>New Diagram</h2>
+        <label for="new-name">Name:</label>
+        <input type="text" id="new-name" required>
+        <div class="modal-buttons">
+            <button id="new-cancel-btn">Cancel</button>
+            <button id="new-create-btn">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Connect Project Modal -->
+<div id="connect-project-modal" class="modal">
+    <div class="modal-content">
+        <h2>Connect New Project</h2>
+        
+        <label for="connect-provider">Git Provider</label>
+        <select id="connect-provider">
+            <option value="github" selected>GitHub</option>
+            <option value="gitlab">GitLab</option>
+            <option value="local">Local</option>
+        </select>
+
+        <div id="connect-local-project-name-group" style="display: none;">
+            <label for="connect-local-project-name">Project Name</label>
+            <input type="text" id="connect-local-project-name" placeholder="My Awesome Project" required>
+        </div>
+
+        <div id="connect-git-fields-group">
+            <label for="connect-repo-path">Repository Path (e.g., owner/repo)</label>
+            <input type="text" id="connect-repo-path" placeholder="your-username/your-repo-name" required>
+
+            <label for="connect-token">Personal Access Token</label>
+            <input type="password" id="connect-token" placeholder="ghp_... or glpat_..." required>
+
+            <div id="connect-master-password-group">
+                <h3>Create a Master Password</h3>
+                <p>This password encrypts your token in the browser. It is never stored or sent anywhere.</p>
+
+                <label for="connect-password">Master Password</label>
+                <input type="password" id="connect-password-single" style="display: none;" required>
+
+                <div id="connect-password-creation-group">
+                    <label for="connect-password">Master Password</label>
+                <input type="password" id="connect-password" required>
+
+                <label for="connect-password-confirm">Confirm Master Password</label>
+                <input type="password" id="connect-password-confirm" required>
+                <div id="connect-password-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Passwords do not match.</div>
+            </div>
+        </div>
+        </div>
+
+        <div class="modal-buttons">
+            <button id="connect-cancel-btn">Cancel</button>
+            <button id="connect-submit-btn">Encrypt & Connect</button>
+        </div>
+    </div>
+</div>
+
+<!-- Unlock Session Modal -->
+<div id="unlock-session-modal" class="modal">
+    <div class="modal-content">
+        <h2>Unlock Project</h2>
+        <p>Enter the master password for <strong id="unlock-project-name"></strong> to start syncing.</p>
+        
+        <label for="unlock-password">Master Password</label>
+        <input type="password" id="unlock-password" required>
+        <div id="unlock-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Incorrect password. Please try again.</div>
+
+        <div class="modal-buttons">
+            <button id="unlock-cancel-btn">Cancel</button>
+            <button id="unlock-submit-btn">Unlock</button>
+        </div>
+    </div>
+</div>
+
+<!-- OntoGrade Report Modal -->
+<div id="ontograde-report-modal" class="modal">
+    <div class="modal-content ontograde-modal-content">
+        <div class="ontograde-header">
+            <h2>🎓 OntoGrade Quality Report</h2>
+            <button id="ontograde-close-btn" class="modal-close-btn">×</button>
+        </div>
+
+        <div class="ontograde-score-display">
+            <div class="score-circle">
+                <span id="ontograde-final-score" class="score-value">-</span>
+                <span class="score-max">/5.0</span>
+            </div>
+            <div id="ontograde-score-label" class="score-label">Calculating...</div>
+        </div>
+
+        <div class="ontograde-summary">
+            <h3>Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">BFO Rooting</span>
+                    <span id="summary-bfo" class="summary-value">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Pattern Adherence</span>
+                    <span id="summary-patterns" class="summary-value">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Logic Consistency</span>
+                    <span id="summary-logic" class="summary-value">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="ontograde-breakdown">
+            <h3>Detailed Breakdown</h3>
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">BFO Rooting</span>
+                    <span id="breakdown-bfo-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-bfo-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-bfo-details" class="breakdown-details">-</div>
+            </div>
+
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">Pattern Adherence</span>
+                    <span id="breakdown-patterns-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-patterns-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-patterns-details" class="breakdown-details">-</div>
+            </div>
+
+            <div class="breakdown-section">
+                <div class="breakdown-header">
+                    <span class="breakdown-title">Logic Consistency</span>
+                    <span id="breakdown-logic-score" class="breakdown-score">-</span>
+                </div>
+                <div class="breakdown-bar">
+                    <div id="breakdown-logic-bar" class="breakdown-fill" style="width: 0%"></div>
+                </div>
+                <div id="breakdown-logic-details" class="breakdown-details">-</div>
+            </div>
+        </div>
+
+        <div id="ontograde-violations" class="ontograde-violations" style="display: none;">
+            <h3>Violations (<span id="violation-count">0</span>)</h3>
+            <div id="violations-list" class="violations-list"></div>
+        </div>
+
+        <div id="ontograde-recommendations" class="ontograde-recommendations">
+            <h3>Recommendations</h3>
+            <ul id="recommendations-list" class="recommendations-list"></ul>
+        </div>
+
+        <div class="ontograde-footer">
+            <div class="report-metadata">
+                <span id="report-timestamp" class="report-time">-</span>
+                <span class="report-version">OntoGrade v2.0</span>
+            </div>
+            <div class="modal-buttons">
+                <button id="ontograde-download-btn" class="button-primary">Download Report (JSON-LD)</button>
+                <button id="ontograde-done-btn">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Library Modal -->
+<div id="pattern-library-modal" class="modal">
+    <div class="modal-content pattern-library-modal-content">
+        <div class="pattern-library-header">
+            <h2>
+                📚 CCO Design Pattern Library
+                <button id="pattern-library-close-btn" class="modal-close-btn">×</button>
+            </h2>
+            <p class="pattern-library-subtitle">
+                Browse and learn about Common Core Ontology design patterns validated by OntoGrade
+            </p>
+            <div class="pattern-controls">
+                <input type="search"
+                       id="pattern-search"
+                       placeholder="Search patterns..."
+                       class="pattern-search">
+                <select id="category-filter" class="category-filter">
+                    <option value="all">All Categories</option>
+                    <option value="core">Core (3)</option>
+                    <option value="temporal">Temporal (1)</option>
+                    <option value="measurement">Measurement (1)</option>
+                    <option value="agent">Agent (2)</option>
+                    <option value="artifact">Artifact (1)</option>
+                </select>
+                <div class="view-toggle">
+                    <button id="grid-view-btn" class="active">Grid</button>
+                    <button id="list-view-btn">List</button>
+                </div>
+            </div>
+        </div>
+        <div id="pattern-grid" class="pattern-grid">
+            <!-- Pattern cards populated by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Pattern Detail Modal -->
+<div id="pattern-detail-modal" class="modal">
+    <div class="modal-content pattern-detail-modal-content">
+        <div id="pattern-detail-content">
+            <!-- Pattern detail content populated by JS -->
+        </div>
+        <div class="modal-buttons">
+            <button id="pattern-detail-close-btn">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Project Settings Modal -->
+<div id="project-settings-modal" class="modal">
+    <div class="modal-content">
+        <h2>Project Settings</h2>
+        <p>Project Name: <strong id="settings-project-name-display"></strong></p>
+        <p>Provider: <span id="settings-project-provider-display"></span></p>
+        <p id="settings-repo-path-group" style="display: none;">Repository: <span id="settings-repo-path-display"></span></p>
+
+        <hr>
+        <h4>Rename Project</h4>
+        <label for="settings-rename-input">New Project Name</label>
+        <input type="text" id="settings-rename-input" placeholder="Enter new project name">
+        <button id="settings-rename-btn" class="button-primary">Rename</button>
+
+        <hr>
+        <div class="danger-zone">
+            <h4>Danger Zone</h4>
+            <button id="settings-disconnect-btn" class="button-danger" style="display: none;">Disconnect from Git</button>
+            <button id="settings-delete-btn" class="button-danger">Delete Project Locally</button>
+        </div>
+
+        <div id="settings-connect-to-git-section" style="display: none;">
+            <hr>
+            <h4>Connect to Git</h4>
+            <label for="settings-connect-provider">Git Provider</label>
+            <select id="settings-connect-provider">
+                <option value="github" selected>GitHub</option>
+                <option value="gitlab">GitLab</option>
+            </select>
+
+            <label for="settings-connect-repo-path">Repository Path (e.g., owner/repo)</label>
+            <input type="text" id="settings-connect-repo-path" placeholder="your-username/your-repo-name" required>
+
+            <label for="settings-connect-token">Personal Access Token</label>
+            <input type="password" id="settings-connect-token" placeholder="ghp_... or glpat_..." required>
+
+            <label for="settings-connect-password">Master Password</label>
+            <input type="password" id="settings-connect-password" required>
+
+            <label for="settings-connect-password-confirm">Confirm Master Password</label>
+            <input type="password" id="settings-connect-password-confirm" required>
+            <div id="settings-connect-password-error" style="color: var(--danger-color); font-size: 0.9rem; display: none;">Passwords do not match.</div>
+            <button id="settings-connect-submit-btn" class="button-primary">Save Connection</button>
+        </div>
+
+        <div class="modal-buttons">
+            <button id="settings-close-btn">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+    // This single import initializes the entire application by running the setup
+    // code within the synchronizations module.
+    console.log('[index.html] Script module loaded. Initializing application...');
+    import { initializeApp } from './src/synchronizations.js';
+
+    initializeApp();
+    console.log('[index.html] initializeApp() has been called.');
+</script>
+
+</body>
+</html>

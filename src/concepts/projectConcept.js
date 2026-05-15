@@ -30,8 +30,9 @@ function _setProjects(projects = []) {
     projectConcept.notify('projectsUpdated', { projects: state.projects, currentProjectId: state.currentProjectId });
 }
 
-function _createProject({ name }) {
-    projectConcept.notify('do:createProject', { name });
+function _createProject({ name, mode } = {}) {
+    // mode is "idb" | "fsa" | undefined (router defaults to idb).
+    projectConcept.notify('do:createProject', { name, mode });
 }
 
 function _renameProject({ projectId, newName }) {
@@ -44,10 +45,10 @@ function _deleteProject({ projectId }) {
 }
 
 function _setCurrentProject({ projectId }) {
-    const newProjectId = parseInt(projectId, 10);
-    if (state.currentProjectId !== newProjectId) {
-        state.currentProjectId = newProjectId;
-        projectConcept.notify('projectChanged', { projectId: newProjectId });
+    // projectId is an opaque compound string ("idb:N" or "fsa:Name"). No coercion.
+    if (state.currentProjectId !== projectId) {
+        state.currentProjectId = projectId;
+        projectConcept.notify('projectChanged', { projectId });
     }
 }
 

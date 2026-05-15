@@ -3,7 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      `frame-ancestors` would belong here, but Chromium ignores it (with a
+      warning) when delivered via <meta>. To enforce framing protection we'd
+      need an HTTP header, which a static-file host can't add. Manifest-src
+      is similarly meta-ignored but doesn't generate a warning, so it stays
+      for spec parity.
+      Trusted Types: `default` is our pass-through audit policy (src/tt-policy.js);
+      `dompurify` is the policy mermaid's bundled DOMPurify installs itself.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: blob:;
+        font-src 'self';
+        connect-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+        manifest-src 'self';
+        require-trusted-types-for 'script';
+        trusted-types default dompurify;
+    ">
     <title>Mermaid Syntax Viewer & Editor</title>
+    <!-- Trusted Types default policy MUST install before any other script. -->
+    <script src="src/tt-policy.js"></script>
     <link rel="stylesheet" href="styles/normalize.min.css">
     <link rel="stylesheet" href="styles/skeleton.css">
     <link rel="stylesheet" href="styles/style.css">
@@ -12,13 +37,26 @@
 
 <header>
     <span>Mermaid Project IDE</span>
-    <div class="theme-switch-container">
-        <label for="theme-toggle" class="theme-switch">
-            <input type="checkbox" id="theme-toggle">
+    <div class="autosave-container">
+        <span class="autosave-label">Autosave</span>
+        <label for="autosave-toggle" class="theme-switch" title="Save automatically 5 seconds after you stop typing (saved diagrams only)">
+            <input type="checkbox" id="autosave-toggle">
             <span class="slider"></span>
         </label>
     </div>
 </header>
+
+<!-- Reconnect banner: shown when an FSA-backed project is active but the
+     folder permission has lapsed (e.g. revoked, or session-expired without
+     persistent permissions). Visibility toggled via JS classList. -->
+<div id="reconnect-banner" class="reconnect-banner">
+    <span class="reconnect-text">
+        <strong>Folder access needed.</strong>
+        Click Reconnect to grant permission to your MermaidIDE folder.
+    </span>
+    <button type="button" id="reconnect-btn">Reconnect</button>
+    <span id="persistent-note" class="persistent-note">(remembered for this site)</span>
+</div>
 
 <main>
     <aside id="project-sidebar">
@@ -36,7 +74,8 @@
         <div id="sidebar-footer">
             <label for="upload-diagrams-input" class="sidebar-btn">Upload .mmd</label>
             <input type="file" id="upload-diagrams-input" accept=".mmd" multiple hidden>
-            <button id="download-project-btn" class="sidebar-btn">Download .zip</button>
+            <button type="button" id="download-project-btn" class="sidebar-btn">Download .zip</button>
+            <button type="button" id="export-project-btn" class="sidebar-btn" title="Copy this browser-storage project to a folder on your computer">Export to folder…</button>
         </div>
     </aside>
 
@@ -90,28 +129,89 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<!-- <script src="app.js" type="module" defer></script> -->
-<script type="module">
-    import { initializeApp } from './src/synchronizations.js';
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeApp();
-    });
-</script>
-<script type="module">
-    // This script connects DOM events to the application's event system.
-    import { uiConcept } from './src/concepts/uiConcept.js';
+<!-- New Project Modal: replaces window.prompt; asks for name + storage mode. -->
+<div id="new-project-modal" class="modal">
+    <div class="modal-content">
+        <h2>New Project</h2>
+        <label for="new-project-name">Name:</label>
+        <input type="text" id="new-project-name" required>
 
-    const uploadInput = document.getElementById('upload-diagrams-input');
-    if (uploadInput) {
-        uploadInput.addEventListener('change', (event) => {
-            const files = event.target.files;
-            // Publish an event to the UI concept, which will be handled in synchronizations.js
-            uiConcept.notify('ui:uploadMmdClicked', { files });
-        });
-    }
-</script>
+        <h3>Where to store this project?</h3>
+        <div class="mode-options">
+            <label class="mode-option">
+                <input type="radio" name="new-project-mode" value="idb" checked>
+                <span class="mode-option-label">
+                    <strong>Browser storage</strong>
+                    <small>Works in any browser. Diagrams live in your browser's IndexedDB. Can be lost if you clear site data or change browsers.</small>
+                </span>
+            </label>
+            <label class="mode-option" id="new-project-mode-fsa-label">
+                <input type="radio" name="new-project-mode" value="fsa">
+                <span class="mode-option-label">
+                    <strong>Folder on your computer</strong>
+                    <small class="mode-option-detail">Your diagrams are real .mmd files. Open them in other tools and back them up easily. Requires Chrome, Edge, or another Chromium browser.</small>
+                </span>
+            </label>
+        </div>
+
+        <div class="modal-buttons">
+            <button type="button" id="new-project-cancel-btn">Cancel</button>
+            <button type="button" id="new-project-create-btn" disabled>Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Foreign-Folder Modal: shown when pickRoot finds an existing MermaidIDE/
+     folder that isn't ours. -->
+<div id="foreign-folder-modal" class="modal">
+    <div class="modal-content">
+        <h2>There's already a folder called "MermaidIDE" here.</h2>
+        <p>
+            It might belong to another app, or it might be a leftover. We don't want to overwrite anything important.
+        </p>
+        <div class="modal-buttons">
+            <button type="button" id="foreign-folder-repick-btn">Pick a different folder</button>
+            <button type="button" id="foreign-folder-nest-btn">Use a nested folder</button>
+        </div>
+    </div>
+</div>
+
+<!-- Export Project Modal: confirm IDB → FSA copy. -->
+<div id="export-project-modal" class="modal">
+    <div class="modal-content">
+        <h2>Export project to folder</h2>
+        <p>
+            Copy <strong id="export-source-name">…</strong> (<span id="export-diagram-count">0</span> diagrams) to a folder on your computer. The original stays in browser storage.
+        </p>
+        <label for="export-dest-name">Destination folder name:</label>
+        <input type="text" id="export-dest-name" required>
+        <div class="modal-buttons">
+            <button type="button" id="export-cancel-btn">Cancel</button>
+            <button type="button" id="export-confirm-btn">Export</button>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Info Modal: shown after the first successful folder pick. -->
+<div id="sync-info-modal" class="modal">
+    <div class="modal-content">
+        <h2>About this folder</h2>
+        <p>
+            If the folder you picked is synced to OneDrive, iCloud, Dropbox, or Google Drive, your diagrams will be backed up there automatically.
+        </p>
+        <p>
+            That's <strong>recommended</strong> — it protects against PC crashes and OS reinstalls. The trade-off is that cloud-sync clients can slow down on very busy editing sessions. Either way is fine.
+        </p>
+        <div class="modal-buttons">
+            <button type="button" id="sync-info-repick-btn">Pick a different folder</button>
+            <button type="button" id="sync-info-ok-btn">Sounds good</button>
+        </div>
+    </div>
+</div>
+
+<script src="vendor/mermaid.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="src/main.js"></script>
 
 </body>
 </html>
