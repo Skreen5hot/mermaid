@@ -262,7 +262,17 @@ function requireReady() {
 
 function cryptoRandom() {
   const a = new Uint8Array(8);
-  (globalThis.crypto || globalThis.msCrypto).getRandomValues(a);
+  // globalThis.crypto landed in Node 19; CI on Node 18 doesn't have it, and
+  // tests exercise writeText which goes through this helper. The temp-file
+  // suffix only needs to avoid same-tick collisions, not be cryptographically
+  // strong, so Math.random is a safe fallback for the test environment. In
+  // any modern browser the first branch always wins.
+  const c = (typeof globalThis !== 'undefined') && (globalThis.crypto || globalThis.msCrypto);
+  if (c && typeof c.getRandomValues === 'function') {
+    c.getRandomValues(a);
+  } else {
+    for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+  }
   return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
