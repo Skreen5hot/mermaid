@@ -318,45 +318,44 @@ src/storage/
 
 ---
 
-### Slice 5a — IDB schema v2→v3 migration
+### Slice 5a — IDB schema additions + new module primitives
 
-**Goal:** New IDB stores in place, migration of existing single-root data runs silently. Existing app behavior preserved — the rest of the app still reads/writes as if `rootHandle` were the source, just now indirected through `fsaProjects` lookups.
+**Goal (revised from earlier plan):** Add the new IDB stores and the two consumer modules (`fsaRegistry`, `auditLog`), with full test coverage. **Migration of existing rootHandle data and rewiring of the router are deferred to 5b** — running migration requires FSA permission, which isn't always granted on first load, and we don't want to gate user access to existing FSA projects on it.
 
-#### 5a.1 IDB shim updates — `src/storage/storage.js`
-- [ ] Bump `DB_VERSION` from 1 to 2 (this is the `MermaidIDE.handles` DB; not to be confused with `mermaid_viewer_db` which stays v2)
-- [ ] `onupgradeneeded` creates `fsaProjects` (keyPath `id`) and `auditLog` (keyPath `id`, autoIncrement) stores
-- [ ] Migration logic in `onupgradeneeded` (or first `init()` after upgrade): if `rootHandle` exists, fetch it, iterate child directory handles, for each create an `fsaProjects` row with `{id: "fsa:<name>", name: <name>, handle: <subHandle>, diagramsPath: "", createdAt: <now>}`; delete `rootHandle` key when done
-- [ ] Audit-log entry recording the migration (`{action: 'migrate-v2-v3', count: N}`)
+5a is purely additive: stores exist, modules export their full API, but **no caller has been rewired yet**. The app behaves identically to today.
+
+#### 5a.1 Shared IDB opener — `src/storage/handlesDb.js`
+- [x] New module owning the `MermaidIDE.handles` IDB connection. Exports `open()`, `_resetForTests()`, and store-name constants
+- [x] Schema v2: creates `h` (legacy, kept for migration), `fsaProjects` (keyPath: `id`), `auditLog` (keyPath: `id`, autoIncrement). Idempotent `if (!contains)` guards in `onupgradeneeded` so fresh installs and v1 upgrades both work
+- [x] `storage.js` refactored to use the shared opener instead of its private `openHandleDB` — version bumps automatically to v2 the next time any code calls into the IDB
 
 #### 5a.2 New module — `src/storage/fsaRegistry.js`
-- [ ] `init()` — opens the IDB, runs migration if needed
-- [ ] `list()` — returns all fsaProjects rows
-- [ ] `get(projectId)` — returns single row or null
-- [ ] `add({ name, handle, diagramsPath })` — generates id, inserts row
-- [ ] `update(projectId, patch)` — merge patch
-- [ ] `remove(projectId)` — delete row
-- [ ] Pure data layer; no events
+- [x] `init()`, `list()`, `get(id)`, `add({name, handle, diagramsPath, id?})`, `update(id, patch)`, `remove(id)`, `clear()` (test helper)
+- [x] `id` defaults to `fsa:<crypto.randomUUID()>` (with a time-random fallback for Node tests). Explicit `id` passthrough is for migration to preserve `fsa:<folderName>` form
+- [x] `update()` preserves the original id even if the patch tries to change it
+- [x] Pure data layer; no events; no callers wired yet
 
 #### 5a.3 New module — `src/storage/auditLog.js`
-- [ ] `init()` — opens IDB
-- [ ] `append(record)` — adds `{time, ...record}` to the log
-- [ ] `list({projectId?, since?, limit?})` — query with optional filters
-- [ ] `count()`, `clear()` — utility (clear for tests)
-- [ ] Retention sweep (matches spec's 8 MB / 8-rotated-files semantics, adapted for IDB row count)
+- [x] `init()`, `append(record)`, `list({projectId?, since?, limit?})`, `count()`, `clear()`, `sweep(cap)`
+- [x] `time` and `action` are canonical fields the module always writes — caller can't shadow via spread
+- [x] `list()` sorts most-recent-first by autoIncrement id
+- [x] `sweep(cap)` deletes oldest rows beyond the cap via cursor; default cap 10,000
 
-#### 5a.4 Tests — `tests/storage/`
-- [ ] `fsaRegistry.test.js` — CRUD + uniqueness
-- [ ] `auditLog.test.js` — append, list with filters, retention
-- [ ] `migration.test.js` — simulate v2 IDB with rootHandle + subfolders, run migration, assert fsaProjects rows + rootHandle gone
+#### 5a.4 Tests
+- [x] `tests/storage/mock-idb.js` — minimal in-memory IDB mock supporting our subset (transactions, stores, add/put/get/getAll/delete/clear/count/openCursor with keyPath + autoIncrement semantics, version-aware open). Microtask-resolved requests so `await` works naturally
+- [x] `tests/storage/fsaRegistry.test.js` — 10 cases: empty list, add with generated id, add with explicit id, get/missing, list all, update merges + preserves id, update missing throws, remove, add input validation, generated id uniqueness
+- [x] `tests/storage/auditLog.test.js` — 12 cases: empty list, action-required validation, server-set time, time/action shadowing protection, project filter, since filter, sort order, limit, count, clear, sweep retention, sweep no-op
+- [x] Migration test deferred to 5b (where the migration logic actually lands)
 
 #### 5a.5 No behavior change verification
-- [ ] All Phase 1–4 tests still pass
-- [ ] Manual: existing FSA projects still appear in the selector after a Pages deploy (verified by user)
+- [x] All Phase 1–4 tests still pass (13 suites green, including the two new ones)
+- [ ] 🔲 Manual: existing FSA projects still appear in the selector after the Pages deploy — verified by user
 
-#### Out of scope for 5a
-- Storage session-model refactor (5b)
-- UX changes for new-project picker (5c)
-- Activity log UI (5d)
+#### Out of scope for 5a (deferred to 5b)
+- Migration logic that reads legacy `rootHandle` and populates `fsaProjects`
+- Router rewiring (still uses `Storage.list('')` for project listing)
+- `Storage.setCurrentProject` / session model
+- Audit log calls replacing in-storage `audit()`
 
 ---
 

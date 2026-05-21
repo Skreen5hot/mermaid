@@ -8,6 +8,7 @@
 
 import { StorageError } from './StorageError.js';
 import { sanitizeName, splitPath, lockKey, guardPublicPath } from './sanitize.js';
+import { open as openHandlesDb, STORE_LEGACY_HANDLES } from './handlesDb.js';
 
 // =========================================================================
 // Branding constants — MermaidIDE specific.
@@ -49,28 +50,17 @@ async function withLock(name, fn) {
 }
 
 // =========================================================================
-// IDB shim for the directory handle. Browser only — tests inject directly
-// via Storage._test.setRoot, bypassing IDB.
+// Legacy single-handle IDB access. The 'h' store holds the v1-era
+// `rootHandle` — kept here until Phase 5b's migration drains it into
+// fsaProjects. New code (5a onward) should not write to 'h'.
 // =========================================================================
-function openHandleDB() {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
-      // No IDB — tests path. Return a sentinel; idbGet/idbPut handle it.
-      resolve(null);
-      return;
-    }
-    const r = indexedDB.open(DB_NAME, 1);
-    r.onupgradeneeded = () => r.result.createObjectStore('h');
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-  });
-}
+const openHandleDB = openHandlesDb;
 
 function idbGet(db, key) {
   if (!db) return Promise.resolve(null);
   return new Promise((res, rej) => {
-    const tx = db.transaction('h', 'readonly');
-    const rq = tx.objectStore('h').get(key);
+    const tx = db.transaction(STORE_LEGACY_HANDLES, 'readonly');
+    const rq = tx.objectStore(STORE_LEGACY_HANDLES).get(key);
     rq.onsuccess = () => res(rq.result);
     rq.onerror = () => rej(rq.error);
   });
@@ -79,8 +69,8 @@ function idbGet(db, key) {
 function idbPut(db, key, val) {
   if (!db) return Promise.resolve();
   return new Promise((res, rej) => {
-    const tx = db.transaction('h', 'readwrite');
-    const rq = tx.objectStore('h').put(val, key);
+    const tx = db.transaction(STORE_LEGACY_HANDLES, 'readwrite');
+    const rq = tx.objectStore(STORE_LEGACY_HANDLES).put(val, key);
     rq.onsuccess = () => res();
     rq.onerror = () => rej(rq.error);
   });
