@@ -51,6 +51,9 @@ function _initialize() {
     _cacheElements();
     _attachEventListeners();
     _initResizers();
+    // One-time cleanup of any mermaid render leaks accumulated by previous
+    // sessions (before the per-render finally-block cleanup shipped).
+    _sweepMermaidLeaks();
 }
 
 function _initResizers() {
@@ -140,15 +143,18 @@ async function _renderMermaidDiagram({ content }) {
     if (!container) return;
 
     const diagramContent = content || 'graph TD\n  A["No diagram content"]';
+    const renderId = `mermaid-svg-${Date.now()}`;
 
     try {
         await mermaid.parse(diagramContent);
-        const { svg } = await mermaid.render(`mermaid-svg-${Date.now()}`, diagramContent);
+        const { svg } = await mermaid.render(renderId, diagramContent);
         const svgEl = _svgFromString(svg);
         if (!svgEl) throw new Error('Mermaid produced unparseable SVG');
         container.replaceChildren(svgEl);
     } catch (error) {
         _renderMermaidErrorInto(container, error);
+    } finally {
+        _removeMermaidLeakById(renderId);
     }
 }
 
@@ -173,6 +179,28 @@ function _safeIdForMermaid(id) {
     return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+// Defensive cleanup for mermaid's render wrapper. mermaid.render creates a
+// temp <div id="d${renderId}"> in <body> during rendering and removes it on
+// success. If any internal step throws (CSS insertRule failures from
+// awkward classDef selectors, foreignObject parse errors, etc.) the wrapper
+// orphans and accumulates — eventually crowding out the rest of the page
+// since each leak's SVG has default browser height ~150px. We track the id
+// and clean up unconditionally in a finally block.
+function _removeMermaidLeakById(renderId) {
+    if (typeof document === 'undefined' || !renderId) return;
+    const leak = document.getElementById(`d${renderId}`);
+    if (leak && leak.parentNode) leak.parentNode.removeChild(leak);
+}
+
+// One-time sweep for leaks that accumulated before this cleanup shipped, or
+// from any future render failure not yet caught by the per-render cleanup.
+// Conservative selector — only matches the two id patterns this module uses.
+function _sweepMermaidLeaks() {
+    if (typeof document === 'undefined' || !document.body || !document.body.querySelectorAll) return;
+    const candidates = document.body.querySelectorAll('body > div[id^="dmermaid-svg-"], body > div[id^="dthumbnail-"]');
+    candidates.forEach((el) => { if (el.parentNode) el.parentNode.removeChild(el); });
+}
+
 function _thumbnailErrorNode(message) {
     const errEl = document.createElement('div');
     errEl.className = 'thumbnail-error';
@@ -186,14 +214,18 @@ async function _renderSingleThumbnail(diagram) {
 
     const safeId = _safeIdForMermaid(diagram.id);
     const source = diagram.content || 'graph TD; A(( ))';
+    const renderId = `thumbnail-${safeId}-${Date.now()}`;
+
     try {
         await mermaid.parse(source);
-        const { svg } = await mermaid.render(`thumbnail-${safeId}-${Date.now()}`, source);
+        const { svg } = await mermaid.render(renderId, source);
         const svgEl = _svgFromString(svg);
         if (!svgEl) throw new Error('Mermaid produced unparseable SVG');
         thumbnailContainer.replaceChildren(svgEl);
     } catch (e) {
         thumbnailContainer.replaceChildren(_thumbnailErrorNode('Invalid Syntax'));
+    } finally {
+        _removeMermaidLeakById(renderId);
     }
 }
 
