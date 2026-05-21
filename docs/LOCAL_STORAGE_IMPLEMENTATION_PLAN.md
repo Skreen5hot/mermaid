@@ -266,6 +266,131 @@ Out-of-band user request between Phase 3 and Phase 4. Reuses the previously-unwi
 - [x] Tests: 8 new cases in `tests/concepts/diagramConcept.test.js` covering persistence, schedule/cancel, unsaved skip, switch-cancel, and the in-flight-typing race
 - [ ] Manual verification in browser pending
 
+## Phase 5 — Per-folder FSA projects
+
+**Goal:** Each FSA-mode project lives in a folder of the user's choosing — not nested inside one global `MermaidIDE/` root. Devs keep diagrams alongside source repos, consultants keep diagrams alongside client folders, etc. Reverses decision D3.
+
+### Decisions log (extending the original)
+
+| # | Decision | Rationale |
+|---|---|---|
+| D11 | **Migrate everyone to per-folder.** Existing single-root users get auto-converted on first launch of the new code; no dual-mode coexistence. | Simpler code (one mental model), one storage shape to maintain. Migration is silent (D14). |
+| D12 | **Diagrams live in a `<picked>/mermaid/` subfolder**, not directly in the picked folder. New projects only — migrated projects retain their legacy flat layout via a `diagramsPath: ''` flag. | Self-contained — never clobbers user files in the picked folder; easy to identify/delete/move as a unit. |
+| D13 | **Project name is independent of folder name.** User picks any folder, then names the project anything. Folder name and project label decoupled. | Real-world projects already have names that don't match disk folders (e.g. `~/Documents/Work/foo-internal/` containing a project called "Foo: Architecture Diagrams"). |
+| D14 | **Audit log is app-wide in IDB**, not per-folder. Each entry carries a `projectId` field. | Easier to search/render in a single UI; one place to enforce retention; survives folder deletion. |
+| D15 | **Silent migration** from single-root v2 to per-folder v3. | On first boot of new code, detect old `rootHandle`, iterate subfolders, create `fsaProjects` entries pointing to each one, delete `rootHandle`. User sees the same project list, no UI prompt. |
+| D16 | **Reconnect banner is scoped to the CURRENT project**, not a list of all disconnected projects. | Lazy: only nudges when the user selects a project that's lapsed. Switching to a healthy project (or IDB) clears it. |
+| D17 | **Project IDs stay opaque strings.** Migrated existing projects keep `fsa:<folderName>` form; new projects get `fsa:<uuid>` (stable across renames). | Backwards compatibility for any UI state referring to old ids; new projects don't tie identity to disk name. |
+
+### Architecture sketch (after Phase 5)
+
+```
+IDB: MermaidIDE.handles v3
+├── fsaProjects               object store
+│   { id, name, handle, diagramsPath, createdAt }
+└── auditLog                  object store
+    { id (autoIncrement), time, action, projectId, ...detail }
+
+(removed in v3): rootHandle key — single-root scheme retired
+```
+
+```
+src/storage/
+├── storage.js                session model: setCurrentProject(handle, opts),
+│                             clearCurrentProject(); all reads/writes apply
+│                             diagramsPath prefix
+├── fsaRegistry.js            new: CRUD for fsaProjects rows
+├── auditLog.js               new: IDB-backed log (append, list, retention sweep)
+├── sanitize.js               unchanged
+├── StorageError.js           unchanged
+├── projectIds.js             helper for fsa:<uuid> generation
+└── idbBackend.js             unchanged (still handles IDB-mode projects)
+```
+
+### Phasing
+
+| Slice | Scope | User-visible? |
+|---|---|---|
+| **5a** | IDB schema v2→v3 migration. New `fsaProjects` + `auditLog` stores. Silent migration of any existing `rootHandle`. **No app behavior changes** — existing UI still works exactly as today. | No |
+| **5b** | Storage session model + audit log extraction. Router uses `fsaRegistry` to look up handles; calls `auditLog.append` instead of in-storage audit. Still no UX change. | No |
+| **5c** | UX: folder picker on every new FSA project; project name prompted separately; `mermaid/` subfolder created; reconnect-banner scoped to current project; foreign-folder modal retired. | **Yes** |
+| **5d** | Settings → Activity Log viewer (revisits the D6-deferred item; cheap now that the log is centralized in IDB). | Yes (small) |
+
+---
+
+### Slice 5a — IDB schema v2→v3 migration
+
+**Goal:** New IDB stores in place, migration of existing single-root data runs silently. Existing app behavior preserved — the rest of the app still reads/writes as if `rootHandle` were the source, just now indirected through `fsaProjects` lookups.
+
+#### 5a.1 IDB shim updates — `src/storage/storage.js`
+- [ ] Bump `DB_VERSION` from 1 to 2 (this is the `MermaidIDE.handles` DB; not to be confused with `mermaid_viewer_db` which stays v2)
+- [ ] `onupgradeneeded` creates `fsaProjects` (keyPath `id`) and `auditLog` (keyPath `id`, autoIncrement) stores
+- [ ] Migration logic in `onupgradeneeded` (or first `init()` after upgrade): if `rootHandle` exists, fetch it, iterate child directory handles, for each create an `fsaProjects` row with `{id: "fsa:<name>", name: <name>, handle: <subHandle>, diagramsPath: "", createdAt: <now>}`; delete `rootHandle` key when done
+- [ ] Audit-log entry recording the migration (`{action: 'migrate-v2-v3', count: N}`)
+
+#### 5a.2 New module — `src/storage/fsaRegistry.js`
+- [ ] `init()` — opens the IDB, runs migration if needed
+- [ ] `list()` — returns all fsaProjects rows
+- [ ] `get(projectId)` — returns single row or null
+- [ ] `add({ name, handle, diagramsPath })` — generates id, inserts row
+- [ ] `update(projectId, patch)` — merge patch
+- [ ] `remove(projectId)` — delete row
+- [ ] Pure data layer; no events
+
+#### 5a.3 New module — `src/storage/auditLog.js`
+- [ ] `init()` — opens IDB
+- [ ] `append(record)` — adds `{time, ...record}` to the log
+- [ ] `list({projectId?, since?, limit?})` — query with optional filters
+- [ ] `count()`, `clear()` — utility (clear for tests)
+- [ ] Retention sweep (matches spec's 8 MB / 8-rotated-files semantics, adapted for IDB row count)
+
+#### 5a.4 Tests — `tests/storage/`
+- [ ] `fsaRegistry.test.js` — CRUD + uniqueness
+- [ ] `auditLog.test.js` — append, list with filters, retention
+- [ ] `migration.test.js` — simulate v2 IDB with rootHandle + subfolders, run migration, assert fsaProjects rows + rootHandle gone
+
+#### 5a.5 No behavior change verification
+- [ ] All Phase 1–4 tests still pass
+- [ ] Manual: existing FSA projects still appear in the selector after a Pages deploy (verified by user)
+
+#### Out of scope for 5a
+- Storage session-model refactor (5b)
+- UX changes for new-project picker (5c)
+- Activity log UI (5d)
+
+---
+
+### Slice 5b — Storage session model + audit log extraction (sketch)
+
+- [ ] `Storage.setCurrentProject(handle, { diagramsPath = '' })` — sets the current handle for subsequent operations
+- [ ] `Storage.clearCurrentProject()`
+- [ ] All operations (`writeText`, `readBytes`, `list`, `rename`, `remove`, `mkdir`) prefix paths with `diagramsPath` if set
+- [ ] Remove internal `audit()`/`maybeRotateAuditLog()`; router calls `auditLog.append()` after each successful Storage operation
+- [ ] Remove `.app/version` marker logic from Storage (no longer needed — `fsaProjects` row IS the marker)
+- [ ] Router: project listing pulls from `fsaRegistry.list()` instead of `Storage.list('')`; per-operation calls `Storage.setCurrentProject` first
+- [ ] Reconnect banner driven by `fsaRegistry` lookup for currently-selected project
+- [ ] Tests updated; all green; no UX change visible
+
+### Slice 5c — UX: per-project folder picker, decoupled names, retired modals (sketch)
+
+- [ ] New-project flow for FSA mode: folder picker → name prompt (defaults to folder basename) → `mermaid/` subfolder created → `fsaRegistry.add(...)`
+- [ ] Picker fires every time (no shared root)
+- [ ] Foreign-folder modal removed; replaced by lighter check: if `<picked>/mermaid/` already exists with files, ask "use this existing one?" or "pick different"
+- [ ] Reconnect banner: per-current-project; "Reconnect to *Name*" wording
+- [ ] Sync-info modal: still shown on first-ever FSA pick (one-time, in localStorage)
+- [ ] Delete-project for FSA: deletes the `mermaid/` subfolder (not the user's parent folder!) and the registry row
+- [ ] Tests for new flow + manual checklist
+- [ ] README updated
+
+### Slice 5d — Activity Log UI (sketch, optional)
+
+- [ ] Settings panel (new UI surface)
+- [ ] Renders `auditLog.list()` results, paginated
+- [ ] Filter by project
+- [ ] Render all values via `textContent`
+
+---
+
 ## Phase 4 — PWA conversion (sketch, optional)
 
 **Goal:** Installable PWA with offline app shell.
