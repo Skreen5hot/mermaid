@@ -230,6 +230,12 @@ function isReady()  { return !!rootHandle && permissionState === 'granted'; }
 function hasRoot()  { return !!rootHandle; }
 function rootName() { return rootHandle?.name || null; }
 
+// Returns the current root handle, or null. Used by the router (5b) when
+// it needs to register a newly-created subfolder in fsaRegistry —
+// `root.getDirectoryHandle(name)` gives us the per-project handle without
+// re-walking from a fresh pick.
+function getRootHandle() { return rootHandle; }
+
 async function detectPersistentPermissions() {
   if (typeof navigator === 'undefined' || !navigator.permissions || !navigator.permissions.query) {
     return false;
@@ -673,6 +679,7 @@ export const Storage = {
   isReady,
   hasRoot,
   rootName,
+  getRootHandle,
   detectPersistentPermissions,
   // Maintenance
   maybeRotateAuditLog,

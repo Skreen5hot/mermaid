@@ -5,6 +5,7 @@ import { uiConcept } from './concepts/uiConcept.js';
 import { tracer } from './utils/tracer.js';
 import { Storage } from './storage/storage.js';
 import { appConfirm, appPrompt, appToast } from './components/dialogs.js';
+import { migrateLegacyRootIfNeeded } from './storage/migration.js';
 
 // --- Synchronization Rules ---
 
@@ -488,9 +489,14 @@ export function initializeApp() {
     // every permissionchange and on project-list updates.
     Storage.on('permissionchange', (state) => {
         updateReconnectBannerState();
-        // After a grant, refresh projects so FSA folders re-appear in the selector.
+        // After a grant: try migration (it's a no-op if nothing to do) then
+        // refresh projects so FSA folders re-appear in the selector. The
+        // refresh sources from fsaRegistry post-migration, falling back to
+        // legacy folder listing otherwise.
         if (state === 'granted') {
-            projectConcept.listen('loadProjects');
+            migrateLegacyRootIfNeeded()
+                .catch(() => {})
+                .finally(() => projectConcept.listen('loadProjects'));
         }
     });
     projectConcept.subscribe((event) => {
