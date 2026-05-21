@@ -359,16 +359,28 @@ src/storage/
 
 ---
 
-### Slice 5b — Storage session model + audit log extraction (sketch)
+### Slice 5b — Migration + project-listing source switch + IDB audit log
 
-- [ ] `Storage.setCurrentProject(handle, { diagramsPath = '' })` — sets the current handle for subsequent operations
-- [ ] `Storage.clearCurrentProject()`
-- [ ] All operations (`writeText`, `readBytes`, `list`, `rename`, `remove`, `mkdir`) prefix paths with `diagramsPath` if set
-- [ ] Remove internal `audit()`/`maybeRotateAuditLog()`; router calls `auditLog.append()` after each successful Storage operation
-- [ ] Remove `.app/version` marker logic from Storage (no longer needed — `fsaProjects` row IS the marker)
-- [ ] Router: project listing pulls from `fsaRegistry.list()` instead of `Storage.list('')`; per-operation calls `Storage.setCurrentProject` first
-- [ ] Reconnect banner driven by `fsaRegistry` lookup for currently-selected project
-- [ ] Tests updated; all green; no UX change visible
+**Goal (revised from earlier plan):** Run the v2→v3 migration when permission is available; route project listing through `fsaRegistry`; move audit-log writes from per-folder `.app/audit.log` to the IDB-backed `auditLog` store. **Session-model API (`setCurrentProject`, `diagramsPath` path prefixing) deferred to 5c** — it doesn't pay off until projects can live in arbitrary folders, which is also a 5c change.
+
+#### What 5b ships
+- [x] `src/storage/migration.js` — `migrateLegacyRootIfNeeded()`. Idempotent, permission-aware (returns `deferred` when grant is missing), non-destructive (leaves legacy `rootHandle` for the new-project flow to keep using until 5c). Audits a `migrate-v2-v3` row on success.
+- [x] Router `_open` runs migration after `Storage.init()` (best-effort, swallows errors). Sync layer's `permissionchange` handler retries migration on every grant so deferred migrations eventually run.
+- [x] `_listProjects` prefers `fsaRegistry.list()`. If empty (e.g. fresh user, or pre-migration state), falls back to the legacy folder-listing path so existing FSA users see their projects on first load even before migration runs.
+- [x] `_createProject` (FSA mode) also calls `fsaRegistry.add(...)` after `Storage.mkdir`, using `Storage.getRootHandle().getDirectoryHandle(name)` for the per-project handle. Best-effort — listing fallback covers the registry-insert-failed edge case.
+- [x] `_deleteProject` (FSA mode) also calls `fsaRegistry.remove(projectId)`.
+- [x] Each successful FSA write/rename/remove emits an `auditLog.append({ action, projectId, ... })` row from the router (replaces the previous in-storage `.app/audit.log` writes — those code paths in `storage.js` are left intact for now but no longer called; full removal in 5c).
+- [x] `Storage.getRootHandle()` added — small public accessor used by the registry-insert path.
+- [x] `tests/storage/migration.test.js` — 8 cases: no-op (fresh / already-migrated), deferred (no permission), migrated (preserves legacy id form), .app skipped, audit entry written, legacy rootHandle preserved, idempotent.
+- [x] `tests/storage/audit.test.js` retired (the in-storage audit it tested is no longer called; `tests/storage/auditLog.test.js` covers the new path).
+- [x] No UX change. All other tests still pass.
+
+#### What's deferred to 5c
+- `Storage.setCurrentProject(handle, opts)` session-model API
+- `diagramsPath` path prefixing in Storage operations
+- Removing the now-unused `audit()` / `ensureAuditFile()` / `maybeRotateAuditLog()` functions from `storage.js` (left intact in 5b in case some path still calls them; removal is safe once 5c rewires the new-project flow)
+- Cleanup of the legacy `rootHandle` IDB key after migration
+- Removing the legacy folder-listing fallback in `_listProjects` (no longer needed once migration is universal)
 
 ### Slice 5c — UX: per-project folder picker, decoupled names, retired modals (sketch)
 

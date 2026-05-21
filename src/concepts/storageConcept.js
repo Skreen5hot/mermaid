@@ -1,6 +1,9 @@
 import { createEventBus } from '../utils/eventBus.js';
 import { createIdbBackend } from '../storage/idbBackend.js';
 import { Storage } from '../storage/storage.js';
+import * as fsaRegistry from '../storage/fsaRegistry.js';
+import * as auditLog from '../storage/auditLog.js';
+import { migrateLegacyRootIfNeeded } from '../storage/migration.js';
 import {
   makeIdbProjectId,
   makeFsaProjectId,
@@ -37,9 +40,11 @@ async function _open() {
     bus.notify('error', `Error opening DB: ${e?.message || e}`);
     return;
   }
-  // Best-effort FSA handle restore. Permission state surfaces via Storage's
-  // own events; we don't gate IDB on it.
-  Storage.init().catch(() => {});
+  // Best-effort FSA handle restore + v2→v3 migration. Both swallow errors;
+  // permission state and migration retries surface via Storage events.
+  Storage.init()
+    .then(() => migrateLegacyRootIfNeeded())
+    .catch(() => {});
 }
 
 async function _listProjects() {
@@ -50,17 +55,26 @@ async function _listProjects() {
   } catch (e) {
     bus.notify('error', `Failed to list IDB projects: ${e?.message || e}`);
   }
-  if (Storage.isReady()) {
+
+  // Prefer the new per-project registry. If migration hasn't run yet (no
+  // rows), fall back to legacy folder listing so existing users see their
+  // projects on first load before they reconnect. Migration will populate
+  // fsaRegistry on the next permission grant, and subsequent listings will
+  // switch to the registry path automatically.
+  const fsaRows = await fsaRegistry.list();
+  if (fsaRows.length > 0) {
+    fsaList = fsaRows.map((row) => ({ id: row.id, name: row.name, mode: 'fsa' }));
+  } else if (Storage.isReady()) {
     try {
       const entries = await Storage.list('');
       fsaList = entries
         .filter((e) => e.kind === 'directory')
         .map((e) => ({ id: makeFsaProjectId(e.name), name: e.name, mode: 'fsa' }));
     } catch (e) {
-      // Storage error — surface as audit/error but still emit IDB projects.
       bus.notify('error', `Failed to list FSA projects: ${e?.message || e}`);
     }
   }
+
   const merged = [
     ...idbList.map((p) => ({ id: makeIdbProjectId(p.id), name: p.name, mode: 'idb' })),
     ...fsaList,
@@ -81,11 +95,30 @@ async function _createProject(payload = {}) {
         return;
       }
       const safe = name.trim();
+      const projectId = makeFsaProjectId(safe);
       await Storage.mkdir(safe);
       const defaultDiagramContent =
         'graph TD\n    A[Start] --> B{Is it?};\n    B -- Yes --> C[OK];\n    C --> D[End];\n    B -- No --> E[Find out];\n    E --> B;';
       await Storage.writeText(`${safe}/generic.mmd`, defaultDiagramContent);
-      bus.notify('projectCreated', { id: makeFsaProjectId(safe), name: safe, mode: 'fsa' });
+
+      // Register the new project in fsaRegistry so the listing path stays
+      // consistent post-migration. Best-effort: if registry insert fails
+      // (e.g. duplicate id from a previously-deleted-then-recreated folder),
+      // we still emit projectCreated — the legacy folder-listing fallback in
+      // _listProjects will surface it.
+      try {
+        const root = Storage.getRootHandle();
+        if (root) {
+          const handle = await root.getDirectoryHandle(safe, { create: false });
+          await fsaRegistry.add({ id: projectId, name: safe, handle, diagramsPath: '' });
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('createProject: fsaRegistry.add failed (non-fatal)', e?.message || e);
+      }
+
+      auditLog.append({ action: 'mkdir', projectId, path: safe }).catch(() => {});
+      bus.notify('projectCreated', { id: projectId, name: safe, mode: 'fsa' });
     } else {
       const created = await idb.createProject({ name });
       bus.notify('projectCreated', { id: makeIdbProjectId(created.id), name: created.name, mode: 'idb' });
@@ -100,6 +133,10 @@ async function _deleteProject({ projectId }) {
     const parsed = parseStorageId(projectId);
     if (parsed.mode === 'fsa') {
       await Storage.remove(parsed.key, { recursive: true });
+      // Drop the registry row too so the project doesn't ghost in the
+      // selector after deletion. Best-effort.
+      try { await fsaRegistry.remove(projectId); } catch {}
+      auditLog.append({ action: 'remove', projectId, path: parsed.key, recursive: true }).catch(() => {});
     } else {
       await idb.deleteProject({ projectId: parsed.key });
     }
@@ -130,6 +167,13 @@ async function _saveDiagram({ diagramData, becomeCurrent = false }) {
           }
         }
       }
+
+      auditLog.append({
+        action: 'write',
+        projectId: diagramData.projectId,
+        path: newPath,
+        bytes: typeof diagramData.content === 'string' ? diagramData.content.length : undefined,
+      }).catch(() => {});
 
       bus.notify('diagramSaved', {
         id: makeFsaDiagramId(project.key, safeName),
@@ -244,7 +288,13 @@ async function _deleteDiagram({ diagramId }) {
     const diag = parseStorageId(diagramId);
     if (diag.mode === 'fsa') {
       const { folder, name } = parseFsaDiagramKey(diag.key);
-      await Storage.remove(`${folder}/${name}.mmd`);
+      const path = `${folder}/${name}.mmd`;
+      await Storage.remove(path);
+      auditLog.append({
+        action: 'remove',
+        projectId: makeFsaProjectId(folder),
+        path,
+      }).catch(() => {});
     } else {
       await idb.deleteDiagram({ diagramId: diag.key });
     }
