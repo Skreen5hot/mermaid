@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls memory/ 2>/dev/null && echo \"---\" && ls C:/Users/aaron/.claude/projects/c--Users-aaron-OneDrive-Documents-mermaid/memory/ 2>/dev/null)",
-      "Read(//c/Users/aaron/.claude/projects/c--Users-aaron-OneDrive-Documents-mermaid/memory/**)"
-    ]
-  }
-}
